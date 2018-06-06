@@ -7,28 +7,38 @@ LIBTOOL = ar -r
 #Compaq compiler C++ options:
 #PCPPOPTS=-D__USE_STD_IOSTREAM -tweak
 
+#MPICH-2 specific option
+#PCPPOPTS=-DMPICH_IGNORE_CXX_SEEK
+
+#Altivec specific C options:
+#PCOPTS=-maltivec -D _OPT_ALTIVEC_
+
 #Pthread linking support options
 PTHREADLD=-pthread
 
 #OpenMP specific compiler options
-OPENMPOPT=-fopenmp
+#OPENMPOPT=-fopenmp
 
 #OpenMP specific linker options
-OPENMPLD=-fopenmp
+#OPENMPLD=-fopenmp
 
 #optimization options
 #OPTIMOPT=-g
 OPTIMOPT=-O
 
+#Poll option
+#POLLOPT=-D__USE_POLL__
 
 #Static linking option (if needed)
 #STATIC=-static
 
-#modern C++ support on
-STD_OPT = -std=c++17
+#C++ 11 support on
+STD_OPT = -std=c++14
 
-TESTLIB = $(ROOT)/tests
-EXTRA_INC = -I$(TESTLIB)
+
+# Auxilary headers
+UTILS=$(ROOT)utils
+EXTRA_INC = -I$(UTILS)
  
 #common options
 COMOPTS = $(STD_OPT)\
@@ -48,6 +58,8 @@ LDFLAGS = -lm -ldl $(OPENMPLD) $(PTHREADLD) $(STATIC)
 
 
 MFLAGS = MPICC=$(MPICC) COPTS="$(COPTS)" CPPOPTS="$(CPPOPTS) LIBTOOL="$(LIBTOOL)"
+
+GTEST_LIB = gtest/lib
 
 all: $(BINS) $(LIBS)
 
