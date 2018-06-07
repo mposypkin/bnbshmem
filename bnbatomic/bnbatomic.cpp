@@ -263,14 +263,19 @@ bool testBench(const BM& bm, double eps) {
 main(int argc, char* argv[]) {
     std::string bench;
     double eps;
+    Benchmarks<double> tests;
     if (argc == 6) {
         bench = argv[1];
         eps = atof(argv[2]);
         maxStepsTotal = atoi(argv[3]);
         procs = atoi(argv[4]);
-        mtStepsLimit = atoi(argv[5]);        
+        mtStepsLimit = atoi(argv[5]);
     } else {
         std::cerr << "Usage: " << argv[0] << " name_of_bench eps max_steps virtual_procs_number parallel_steps_limit\n";
+        std::cerr << "Available benchmarks:\n";
+        for (auto b : tests) {
+            std::cerr << b->getDesc() << "\n";
+        }
         return -1;
     }
     std::cout << "Simple PBnB solver with np = " << procs << ", mtStepsLimit =  " << mtStepsLimit << ", maxStepsTotal = " << maxStepsTotal << std::endl;
@@ -279,7 +284,6 @@ main(int argc, char* argv[]) {
     PowellSingular2Benchmark<double> pb(8);
     testBench(pb);
 #else        
-    Benchmarks<double> tests;
     for (auto bm : tests) {
         if (bench == bm->getDesc())
             testBench(*bm, eps);
