@@ -1,4 +1,4 @@
-#Multithreaded BnB interval solver
+# Multithreaded BnB interval solver
 
 Coded by *M. Posypkin*
 
