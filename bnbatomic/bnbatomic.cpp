@@ -248,8 +248,7 @@ double findMin(const BM& bm, double eps, int maxstep) {
     return s.mRecordVal;
 }
 
-bool testBench(const BM& bm) {
-    constexpr double eps = 0.1;
+bool testBench(const BM& bm, double eps) {
     std::cout << "*************Testing benchmark**********" << std::endl;
     std::cout << bm;
     double v = findMin(bm, eps, maxStepsTotal);
@@ -262,14 +261,17 @@ bool testBench(const BM& bm) {
 }
 
 main(int argc, char* argv[]) {
-    if (argc >= 2) {
-        procs = atoi(argv[1]);
-    }
-    if (argc >= 3) {
-        mtStepsLimit = atoi(argv[2]);
-    }
-    if (argc >= 4) {
+    std::string bench;
+    double eps;
+    if (argc == 6) {
+        bench = argv[1];
+        eps = atof(argv[2]);
         maxStepsTotal = atoi(argv[3]);
+        procs = atoi(argv[4]);
+        mtStepsLimit = atoi(argv[5]);        
+    } else {
+        std::cerr << "Usage: " << argv[0] << " name_of_bench eps max_steps virtual_procs_number parallel_steps_limit\n";
+        return -1;
     }
     std::cout << "Simple PBnB solver with np = " << procs << ", mtStepsLimit =  " << mtStepsLimit << ", maxStepsTotal = " << maxStepsTotal << std::endl;
     std::cout << "record is " << (recv.is_lock_free() ? "lock free" : "not lock free") << std::endl;
@@ -279,7 +281,8 @@ main(int argc, char* argv[]) {
 #else        
     Benchmarks<double> tests;
     for (auto bm : tests) {
-        testBench(*bm);
+        if (bench == bm->getDesc())
+            testBench(*bm, eps);
     }
 #endif    
 }
