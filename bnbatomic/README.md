@@ -8,7 +8,7 @@ The program use C++ 17 threads to parallelize the branch-and-bound methods based
 
     bnbatomic.exe "name_of_bench" eps max_steps virtual_procs_number parallel_steps_limit
 
-**or (to list available test functions): **
+**or (to list available test functions):**
     
     bnbatomic.exe list
 
