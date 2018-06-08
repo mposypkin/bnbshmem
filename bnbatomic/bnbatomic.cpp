@@ -18,7 +18,7 @@
 #include <functional>
 #include <thread>
 #include <chrono>
-#include <testfuncs/benchmarks.hpp>
+#include <common/parbench.hpp>
 
 using BM = Benchmark<double>;
 using Box = std::vector<Interval<double>>;
@@ -234,7 +234,7 @@ double findMin(const BM& bm, double eps, int maxstep) {
     end = std::chrono::system_clock::now();
     int mseconds = (std::chrono::duration_cast<std::chrono::microseconds> (end - start)).count();
     std::cout << "Time: " << mseconds << " microsecond\n";
-    std::cout << "Time per subproblem: " << (double) s.mSteps / (double) mseconds << " miscroseconds." << std::endl;
+    std::cout << "Time per subproblem: " << (double) mseconds / (double) s.mSteps << " miscroseconds." << std::endl;
     if (s.mSteps >= maxstep) {
         std::cout << "Failed to converge in " << maxstep << " steps\n";
     } else {
@@ -263,8 +263,13 @@ bool testBench(const BM& bm, double eps) {
 main(int argc, char* argv[]) {
     std::string bench;
     double eps;
-    Benchmarks<double> tests;
-    if (argc == 6) {
+    ParBenchmarks<double> tests;
+    if((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
+        for (auto b : tests) {
+            std::cout << b->getDesc() << "\n";
+        }        
+        return 0;
+    } else if (argc == 6) {
         bench = argv[1];
         eps = atof(argv[2]);
         maxStepsTotal = atoi(argv[3]);
@@ -272,10 +277,8 @@ main(int argc, char* argv[]) {
         mtStepsLimit = atoi(argv[5]);
     } else {
         std::cerr << "Usage: " << argv[0] << " name_of_bench eps max_steps virtual_procs_number parallel_steps_limit\n";
-        std::cerr << "Available benchmarks:\n";
-        for (auto b : tests) {
-            std::cerr << b->getDesc() << "\n";
-        }
+        std::cerr << "or to list benchmarks run:\n";
+        std::cerr << argv[0] << " list\n";
         return -1;
     }
     std::cout << "Simple PBnB solver with np = " << procs << ", mtStepsLimit =  " << mtStepsLimit << ", maxStepsTotal = " << maxStepsTotal << std::endl;

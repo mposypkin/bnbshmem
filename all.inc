@@ -28,7 +28,8 @@ OPTIMOPT=-O
 STD_OPT = -std=c++17
 
 TESTLIB = $(ROOT)/tests
-EXTRA_INC = -I$(TESTLIB)
+
+EXTRA_INC = -I$(TESTLIB) 
  
 #common options
 COMOPTS = $(STD_OPT)\
@@ -37,6 +38,7 @@ COMOPTS = $(STD_OPT)\
        $(OPENMPOPT)\
        $(OPTIMOPT)\
        $(POLLOPT)
+
 #C options
 COPTS=$(COMOPTS) $(ADDIT_INCS) $(PCOPTS)
 
