@@ -31,15 +31,15 @@
 using BM = Benchmark<double>;
 using Box = std::vector<Interval<double>>;
 
-const static double gEps = 0.1;
+static double gEps = 0.1;
 
-const static double gSubsSplitCoeff = 0.5;
+static double gSubsSplitCoeff = 0.5;
 
-const static double gStepsSplitCoeff = 0.5;
+static double gStepsSplitCoeff = 0.5;
 
-const static int gMtSubsLimit = 10;
+static int gMtSubsLimit = 10;
 
-const static int gMaxStepsTotal = 1000000;
+static int gMaxStepsTotal = 1000000;
 
 static int gProcs = 4;
 
@@ -62,7 +62,7 @@ struct State {
     State(const State& st) : mRecordVal(st.mRecordVal),
     mRecord(st.mRecord),
     mPool(st.mPool),
-    mMaxSteps(st.mMaxSteps),
+    mRemainingSteps(st.mRemainingSteps),
     mStatus(st.mStatus.load()),
     mMutex() {
     }
@@ -71,13 +71,13 @@ struct State {
         mRecordVal = st.mRecordVal;
         mRecord = st.mRecord;
         mPool.assign(st.mPool.begin(), st.mPool.end());
-        mMaxSteps = st.mMaxSteps;
+        mRemainingSteps = st.mRemainingSteps;
         mStatus.store(st.mStatus.load());
         return *this;
     }
 
     void merge(const std::shared_ptr<State> s) {
-        mMaxSteps += s->mMaxSteps;
+        mRemainingSteps += s->mRemainingSteps;
         if (s->mRecordVal < mRecordVal) {
             mRecordVal = s->mRecordVal;
             mRecord = s->mRecord;
@@ -86,32 +86,32 @@ struct State {
     }
 
     bool hasResources() {
-        return !mPool.empty() && (mMaxSteps > 0);
+        return !mPool.empty() && (mRemainingSteps > 0);
     }
 
     void printResourses() {
         std::cout << "Remaining task count: " << mPool.size() << "\n"
-                "Remainng steps count: " << mMaxSteps << "\n";
+                "Remainng steps count: " << mRemainingSteps << "\n";
     }
 
     void assignTaskTo(std::shared_ptr<State> st) {
         *st = *this;
-        mMaxSteps = 0;
+        mRemainingSteps = 0;
         mPool.clear();
     }
 
     std::shared_ptr<State> trySplit(std::shared_ptr<State> s = nullptr) {
         std::lock_guard<std::mutex> lock(mMutex);
         const int pool_size = mPool.size();
-        if (pool_size <= gMtSubsLimit || mMaxSteps <= gMtStepsLimit) {
+        if (pool_size <= gMtSubsLimit || mRemainingSteps <= gMtStepsLimit) {
             return nullptr;
         }
         if (s == nullptr) {
             s = std::make_shared<State>();
         }
-        const int mv_step_count = mMaxSteps * gStepsSplitCoeff;
-        mMaxSteps -= mv_step_count;
-        s->mMaxSteps = mv_step_count;
+        const int mv_step_count = mRemainingSteps * gStepsSplitCoeff;
+        mRemainingSteps -= mv_step_count;
+        s->mRemainingSteps = mv_step_count;
         s->mRecord = mRecord;
         s->mRecordVal = mRecordVal;
         const int mv_sub_count = pool_size * gSubsSplitCoeff;
@@ -132,7 +132,7 @@ struct State {
         mRecordVal = std::numeric_limits<double>::max();
         mRecord.clear();
         mPool.clear();
-        mMaxSteps = 0;
+        mRemainingSteps = 0;
     }
 
     void setReady() {
@@ -163,7 +163,7 @@ struct State {
     double mRecordVal;
     std::vector<double> mRecord;
     std::vector<Box> mPool;
-    int mMaxSteps;
+    int mRemainingSteps;
     std::atomic<Status> mStatus;
     std::mutex mMutex;
 };
@@ -259,7 +259,7 @@ std::ostream& operator<<(std::ostream & out, const std::shared_ptr<State> s) {
             out << ", ";
     }
     out << "]\n";
-    out << "\"max steps\" :" << s->mMaxSteps << "\n";
+    out << "\"max steps\" :" << s->mRemainingSteps << "\n";
     return out;
 }
 
@@ -300,7 +300,7 @@ void solveSerial(std::shared_ptr<State> s, const BM& bm) {
 
     while (s->hasResources()) {
         Box b = s->getSub();
-        s->mMaxSteps--;
+        s->mRemainingSteps--;
         getCenter(b, c);
         double v = bm.calcFunc(c);
         double rv = gRecord.load();
@@ -327,7 +327,7 @@ void runThread(std::shared_ptr<State> s, const BM& bm) {
 }
 
 bool try_assign_run(std::shared_ptr<State> sender, std::shared_ptr<State> receiver, const BM& bm) {
-    if (sender->hasResources() && sender->mMaxSteps > gMtStepsLimit) {
+    if (sender->hasResources() && sender->mRemainingSteps > gMtStepsLimit) {
         sender->assignTaskTo(receiver);
         runThread(receiver, bm);
         return true;
@@ -344,7 +344,7 @@ void solve(std::shared_ptr<State> init_s, const BM& bm) {
 
     runThread(first_s, bm);
 
-    while (gThreadList.ActiveCount() || (init_s->hasResources() && init_s->mMaxSteps > gMtStepsLimit)) {
+    while (gThreadList.ActiveCount() || (init_s->hasResources() && init_s->mRemainingSteps > gMtStepsLimit)) {
         for (auto iter = gThreadList().begin(); iter != gThreadList().end(); ++iter) {
             std::shared_ptr<State> cur_state = *iter;
             if (cur_state->isReady()) {
@@ -411,7 +411,7 @@ double findMin(const BM& bm) {
     std::shared_ptr<State> s = std::make_shared<State>();
     s->mPool.push_back(ibox);
     s->mRecordVal = std::numeric_limits<double>::max();
-    s->mMaxSteps = gMaxStepsTotal;
+    s->mRemainingSteps = gMaxStepsTotal;
     std::chrono::time_point<std::chrono::steady_clock> start, end;
     start = std::chrono::steady_clock::now();
 #if 0
@@ -422,9 +422,9 @@ double findMin(const BM& bm) {
     end = std::chrono::steady_clock::now();
     int mseconds = (std::chrono::duration_cast<std::chrono::microseconds> (end - start)).count();
     std::cout << "Time: " << mseconds << " microsecond\n";
-    const int steps = gMaxStepsTotal - s->mMaxSteps;
+    const int steps = gMaxStepsTotal - s->mRemainingSteps;
     std::cout << "Time per subproblem: " << ((mseconds > 0) ? ((double) mseconds / (double) steps) : 0) << " miscroseconds." << std::endl;
-    if (s->mMaxSteps == 0) {
+    if (s->mRemainingSteps == 0) {
         std::cout << "Failed to converge in " << gMaxStepsTotal << " steps\n";
     } else {
         std::cout << "Converged in " << steps << " steps\n";
@@ -437,16 +437,21 @@ double findMin(const BM& bm) {
     return gRecord.load();
 }
 
-bool testBench(const BM& bm) {
-    std::cout << "*************Testing benchmark**********" << std::endl;
-    std::cout << "Available thread count: " << std::thread::hardware_concurrency() << std::endl;
-    std::cout << "Max thread count: " << gProcs << std::endl;
-    std::cout << "Max steps count: " << gMaxStepsTotal << std::endl;
+void printInfo() {
+    std::cout << "Record is lock-free: " << gRecord.is_lock_free() << std::endl;
     std::cout << "Eps: " << gEps << std::endl;
-    std::cout << "Subs split coeffitient count: " << gSubsSplitCoeff << std::endl;
+    std::cout << "Max steps count: " << gMaxStepsTotal << std::endl;
+    std::cout << "Max thread count: " << gProcs << std::endl;
+    std::cout << "Available thread count: " << std::thread::hardware_concurrency() << std::endl;
     std::cout << "Steps split coeffitient count: " << gStepsSplitCoeff << std::endl;
+    std::cout << "Subs split coeffitient count: " << gSubsSplitCoeff << std::endl;
     std::cout << "Steps limit: " << gMtStepsLimit << std::endl;
     std::cout << "Subs limit: " << gMtSubsLimit << std::endl << std::endl;
+}
+
+bool testBench(const BM& bm) {
+    std::cout << "*************Testing benchmark**********" << std::endl;
+    printInfo();
     std::cout << bm;
 
     bool res_flag = true;
@@ -460,6 +465,17 @@ bool testBench(const BM& bm) {
     std::cout << "****************************************" << std::endl << std::endl;
 
     return res_flag;
+}
+
+void printHelp(std::string bin_name) {
+    std::cout << "Usage: " << bin_name << " '<name_of_bench>' <eps max_steps> <virtual_procs_number> <split_steps_limit> "
+                                          "<split_subs_limit> <split_steps_coeff> <split_subs_coeff>\n\n";
+    std::cout << "to run all tests run\n";
+    std::cout << bin_name << std::endl << std::endl;
+    std::cout << "to list benchmarks run:\n";
+    std::cout << bin_name << " list\n\n";
+    std::cout << "to see this message run\n";
+    std::cout << bin_name << " --help\n";
 }
 
 main(int argc, char** argv) {
@@ -482,24 +498,60 @@ main(int argc, char** argv) {
     //        {"Trid 10 function", 7}
     //    });
 
-
-    std::cout << "Record is lock-free: " << gRecord.is_lock_free() << std::endl;
     switch (argc) {
-            int temp;
+            double temp;
+        case 9:
+        {
+            temp = std::atof(argv[8]);
+            gSubsSplitCoeff = temp ? temp : gSubsSplitCoeff;
+        }
+        case 8:
+        {
+            temp = std::atof(argv[7]);
+            gStepsSplitCoeff = temp ? temp : gStepsSplitCoeff;
+        }
+        case 7:
+        {
+            temp = std::atoi(argv[6]);
+            gMtSubsLimit = temp ? temp : gMtSubsLimit;
+        }
+        case 6:
+        {
+            temp = std::atoi(argv[5]);
+            gMtStepsLimit = temp ? temp : gMtStepsLimit;
+        }
+        case 5:
+        {
+            temp = std::atoi(argv[4]);
+            gProcs = temp ? temp : gProcs;
+        }
         case 4:
         {
             temp = std::atoi(argv[3]);
-            gMtStepsLimit = temp ? temp : gMtStepsLimit;
+            gMaxStepsTotal = temp ? temp : gMaxStepsTotal;
         }
         case 3:
         {
-            temp = std::atoi(argv[2]);
-            gProcs = temp ? temp : gProcs;
+            temp = std::atof(argv[2]);
+            gEps = temp ? temp : gEps;
         }
         case 2:
         {
-            int i = std::atoi(argv[1]) - 1;
-            testBench(**(tests.begin() + i));
+            if(std::string(argv[1]) == std::string("list")) {
+                for (auto b : tests) {
+                    std::cout << b->getDesc() << "\n";
+                }
+                return 0;
+            }
+            if(std::string(argv[1]) == std::string("--help")) {
+                printHelp(argv[0]);
+                return 0;
+            }
+            std::string bench = argv[1];
+            for (auto bm : tests) {
+                if (bench == bm->getDesc())
+                    testBench(*bm);
+            }
             break;
         }
 
