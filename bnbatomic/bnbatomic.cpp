@@ -29,6 +29,10 @@ static int mtStepsLimit = 1000;
 
 static int maxStepsTotal = 1000000;
 
+static std::string knrec;
+
+constexpr char knownRecord[] = "knrec";
+
 std::atomic<double> recv;
 
 //const std::memory_order morder = std::memory_order_seq_cst;
@@ -220,8 +224,12 @@ double findMin(const BM& bm, double eps, int maxstep) {
     }
     State s;
     s.mPool.push_back(ibox);
-    s.mRecordVal = std::numeric_limits<double>::max();
-    recv = std::numeric_limits<double>::max();
+    if (knrec == std::string(knownRecord)) {
+        s.mRecordVal = bm.getGlobMinY();
+    } else {
+        s.mRecordVal = std::numeric_limits<double>::max();
+    }
+    recv = s.mRecordVal;
     s.mMaxSteps = maxstep;
     s.mProcs = procs;
     std::chrono::time_point<std::chrono::system_clock> start, end;
@@ -262,21 +270,23 @@ bool testBench(const BM& bm, double eps) {
 
 main(int argc, char* argv[]) {
     std::string bench;
+
     double eps;
     ParBenchmarks<double> tests;
-    if((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
+    if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
             std::cout << b->getDesc() << "\n";
-        }        
+        }
         return 0;
-    } else if (argc == 6) {
+    } else if (argc == 7) {
         bench = argv[1];
-        eps = atof(argv[2]);
-        maxStepsTotal = atoi(argv[3]);
-        procs = atoi(argv[4]);
-        mtStepsLimit = atoi(argv[5]);
+        knrec = argv[2];
+        eps = atof(argv[3]);
+        maxStepsTotal = atoi(argv[4]);
+        procs = atoi(argv[5]);
+        mtStepsLimit = atoi(argv[6]);
     } else {
-        std::cerr << "Usage: " << argv[0] << " name_of_bench eps max_steps virtual_procs_number parallel_steps_limit\n";
+        std::cerr << "Usage: " << argv[0] << " name_of_bench knrec|unknrec eps max_steps virtual_procs_number parallel_steps_limit\n";
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
