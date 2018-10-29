@@ -25,13 +25,16 @@
 #include <unordered_set>
 #include <condition_variable>
 
-#include <testfuncs/benchmarks.hpp>
-
+#include <common/parbench.hpp>
 
 using BM = Benchmark<double>;
 using Box = std::vector<Interval<double>>;
 
+constexpr char gKnownRecord[] = "knrec";
+
 static double gEps = 0.1;
+
+static std::string gKnrec = "knrec";
 
 static double gSubsSplitCoeff = 0.5;
 
@@ -46,6 +49,7 @@ static int gProcs = 4;
 static int gMtStepsLimit = 1000;
 
 std::atomic<double> gRecord;
+
 
 /**
  * BnB state
@@ -64,8 +68,7 @@ struct State {
     mPool(st.mPool),
     mRemainingSteps(st.mRemainingSteps),
     mStatus(st.mStatus.load()),
-    mMutex() {
-    }
+    mMutex() {}
 
     State& operator=(const State& st) {
         mRecordVal = st.mRecordVal;
@@ -78,6 +81,7 @@ struct State {
 
     void merge(const std::shared_ptr<State> s) {
         mRemainingSteps += s->mRemainingSteps;
+        s->mRemainingSteps = 0;
         if (s->mRecordVal < mRecordVal) {
             mRecordVal = s->mRecordVal;
             mRecord = s->mRecord;
@@ -86,7 +90,7 @@ struct State {
     }
 
     bool hasResources() {
-        return !mPool.empty() && (mRemainingSteps > 0);
+        return ! mPool.empty() && (mRemainingSteps > 0);
     }
 
     void printResourses() {
@@ -115,9 +119,9 @@ struct State {
         s->mRecord = mRecord;
         s->mRecordVal = mRecordVal;
         const int mv_sub_count = pool_size * gSubsSplitCoeff;
-        auto mv_beg_iter = mPool.begin() + mv_sub_count;
-        s->mPool.assign(mPool.begin(), mv_beg_iter);
-        mPool.erase(mPool.begin(), mv_beg_iter);
+        auto mv_end_iter = mPool.begin() + mv_sub_count;
+        s->mPool.assign(mPool.begin(), mv_end_iter);
+        mPool.erase(mPool.begin(), mv_end_iter);
         return s;
     }
 
@@ -125,6 +129,7 @@ struct State {
         std::lock_guard<std::mutex> lock(mMutex);
         const Box box = mPool.back();
         mPool.pop_back();
+        mRemainingSteps--;
         return box;
     }
 
@@ -188,16 +193,15 @@ public:
 
     void wait_notification(std::shared_ptr<State> s) {
         std::unique_lock<std::mutex> lock(s->mMutex);
-        mCV.wait(lock, [&]() {
+        mCV.wait_for(lock, mWaitPeriod, [&]() {
             return mNotificationCount.load() != 0;
         });
     }
 
-
-
 private:
     std::condition_variable mCV;
     std::atomic<int> mNotificationCount;
+    std::chrono::duration<int64_t, std::milli> mWaitPeriod = std::chrono::milliseconds(100);
 };
 
 Notifier gNotifier;
@@ -300,7 +304,6 @@ void solveSerial(std::shared_ptr<State> s, const BM& bm) {
 
     while (s->hasResources()) {
         Box b = s->getSub();
-        s->mRemainingSteps--;
         getCenter(b, c);
         double v = bm.calcFunc(c);
         double rv = gRecord.load();
@@ -358,7 +361,7 @@ void solve(std::shared_ptr<State> init_s, const BM& bm) {
                 gNotifier.resolve();
 
                 bool flag = try_assign_run(init_s, cur_state, bm);
-                if (!flag) {
+                if (! flag) {
                     gThreadList.addReadyState(cur_state);
                 }
                 continue;
@@ -392,8 +395,9 @@ void solve(std::shared_ptr<State> init_s, const BM& bm) {
         }
     }
 
-
+    std::cout << "Remaining steps: " << init_s->mRemainingSteps << std::endl;
     if (init_s->hasResources()) {
+        init_s->printResourses();
         solveSerial(init_s, bm);
     }
 
@@ -412,6 +416,13 @@ double findMin(const BM& bm) {
     s->mPool.push_back(ibox);
     s->mRecordVal = std::numeric_limits<double>::max();
     s->mRemainingSteps = gMaxStepsTotal;
+
+    if (gKnrec == gKnownRecord) {
+        s->mRecordVal = bm.getGlobMinY();
+    } else {
+        s->mRecordVal = std::numeric_limits<double>::max();
+    }
+
     std::chrono::time_point<std::chrono::steady_clock> start, end;
     start = std::chrono::steady_clock::now();
 #if 0
@@ -439,6 +450,11 @@ double findMin(const BM& bm) {
 
 void printInfo() {
     std::cout << "Record is lock-free: " << gRecord.is_lock_free() << std::endl;
+    if (gKnrec == gKnownRecord) {
+        std::cout << "Init global record: true" << std::endl;
+    } else {
+        std::cout << "Init global record: false" << std::endl;
+    }
     std::cout << "Eps: " << gEps << std::endl;
     std::cout << "Max steps count: " << gMaxStepsTotal << std::endl;
     std::cout << "Max thread count: " << gProcs << std::endl;
@@ -478,110 +494,32 @@ void printHelp(std::string bin_name) {
     std::cout << bin_name << " --help\n";
 }
 
-main(int argc, char** argv) {
-    Benchmarks<double> tests;
-
-    std::unordered_map<std::string, int> task_map({
-        {"Biggs EXP5 Function", 13},
-        {"Helical Valley function", 7},
-        {"Hosaki function", 4},
-        {"Langerman-5 function", 4},
-        {"Quintic function", 5},
-        {"Deckkers-Aarts function", 11},
-        {"Dolan function", 6},
-        {"Goldstein Price function", 13},
-        {"Mishra 9 function", 7},
-        {"Trid 10 function", 7}
-    });
-
-    //    std::unordered_map<std::string, int> task_map({
-    //        {"Trid 10 function", 7}
-    //    });
-
-    switch (argc) {
-            double temp;
-        case 9:
-        {
-            temp = std::atof(argv[8]);
-            gSubsSplitCoeff = temp ? temp : gSubsSplitCoeff;
+int main(int argc, char** argv) {
+    std::string bench;
+    ParBenchmarks<double> tests;
+    if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
+        for (auto b : tests) {
+            std::cout << b->getDesc() << "\n";
         }
-        case 8:
-        {
-            temp = std::atof(argv[7]);
-            gStepsSplitCoeff = temp ? temp : gStepsSplitCoeff;
-        }
-        case 7:
-        {
-            temp = std::atoi(argv[6]);
-            gMtSubsLimit = temp ? temp : gMtSubsLimit;
-        }
-        case 6:
-        {
-            temp = std::atoi(argv[5]);
-            gMtStepsLimit = temp ? temp : gMtStepsLimit;
-        }
-        case 5:
-        {
-            temp = std::atoi(argv[4]);
-            gProcs = temp ? temp : gProcs;
-        }
-        case 4:
-        {
-            temp = std::atoi(argv[3]);
-            gMaxStepsTotal = temp ? temp : gMaxStepsTotal;
-        }
-        case 3:
-        {
-            temp = std::atof(argv[2]);
-            gEps = temp ? temp : gEps;
-        }
-        case 2:
-        {
-            if(std::string(argv[1]) == std::string("list")) {
-                for (auto b : tests) {
-                    std::cout << b->getDesc() << "\n";
-                }
-                return 0;
-            }
-            if(std::string(argv[1]) == std::string("--help")) {
-                printHelp(argv[0]);
-                return 0;
-            }
-            std::string bench = argv[1];
-            for (auto bm : tests) {
-                if (bench == bm->getDesc())
-                    testBench(*bm);
-            }
-            break;
-        }
-
-        default:
-        {
-            int bm_count = 0;
-            int failed_tests = 0;
-            std::vector<std::shared_ptr<Benchmark<double>>> failed_bm_vec;
-            for (auto bm : tests) {
-                std::string func_name = bm->getDesc();
-                auto test_f = task_map.find(func_name);
-                if (test_f == task_map.end()) {
-                    continue;
-                }
-
-                gProcs = task_map[func_name];
-
-                std::cout << "Test " << bm_count++ << std::endl;
-                int res = testBench(*bm);
-                if (!res) {
-                    failed_bm_vec.push_back(bm);
-                    ++failed_tests;
-                }
-            }
-
-            std::cout << "Failed tests count: " << failed_tests << std::endl;
-            std::cout << "Failed tests:" << std::endl;
-            for (auto bm : failed_bm_vec) {
-                std::cout << *bm << std::endl;
-            }
-        }
+        return 0;
+    } else if (argc == 10) {
+        bench = argv[1];
+        gKnrec = argv[2];
+        gEps = atof(argv[3]);
+        gMaxStepsTotal = atoi(argv[4]);
+        gProcs = atoi(argv[5]);
+        gStepsSplitCoeff = atof(argv[6]);
+        gSubsSplitCoeff = atof(argv[7]);
+        gMtStepsLimit = atoi(argv[8]);
+        gMtSubsLimit = atoi(argv[9]);
+    } else {
+        std::cerr << "Usage: " << argv[0] << " name_of_bench knrec|unknrec eps max_steps thread_count steps_split_coeff subs_split_coeff step_limit subs_limit\n";
+        std::cerr << "or to list benchmarks run:\n";
+        std::cerr << argv[0] << " list\n";
+        return -1;
+    }
+    for (auto bm : tests) {
+        if (bench == bm->getDesc())
+            testBench(*bm);
     }
 }
