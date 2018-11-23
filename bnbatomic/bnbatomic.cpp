@@ -259,15 +259,19 @@ double findMin(const BM& bm) {
 }
 
 bool testBench(const BM& bm) {
+    bool rv = true;
     std::cout << "*************Testing benchmark**********" << std::endl;
     std::cout << bm;
     double v = findMin(bm);
     double diff = v - bm.getGlobMinY();
     if (diff > gEps) {
         std::cout << "BnB failed for " << bm.getDesc() << " benchmark " << std::endl;
+        rv = false;
     }
     std::cout << "the difference is " << v - bm.getGlobMinY() << std::endl;
     std::cout << "****************************************" << std::endl << std::endl;
+    char c;
+    return rv;
 }
 
 main(int argc, char* argv[]) {

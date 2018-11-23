@@ -147,15 +147,18 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
 }
 
 bool testBench(const BM& bm) {
+    bool rv = true;
     std::cout << "*************Testing benchmark**********" << std::endl;
     std::cout << bm;
     double v = findMin(bm, gEps, gMaxStepsTotal, gProcs);
     double diff = v - bm.getGlobMinY();
     if (diff > gEps) {
+        rv = false;
         std::cout << "BnB failed for " << bm.getDesc() << " benchmark " << std::endl;
     }
     std::cout << "the difference is " << v - bm.getGlobMinY() << std::endl;
     std::cout << "****************************************" << std::endl << std::endl;
+    return rv;
 }
 
 main(int argc, char* argv[]) {
