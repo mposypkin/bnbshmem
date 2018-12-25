@@ -34,6 +34,17 @@ static double gEps;
 using BM = Benchmark<double>;
 using Box = std::vector<Interval<double>>;
 
+std::atomic<double> gRecv;
+
+
+
+//const std::memory_order morder = std::memory_order_seq_cst;
+const std::memory_order morder = std::memory_order_relaxed;
+
+#define EXCHNAGE_OPER compare_exchange_strong
+//#define EXCHNAGE_OPER compare_exchange_weak
+
+
 double len(const Interval<double>& I) {
     return I.rb() - I.lb();
 }
@@ -62,8 +73,8 @@ void getCenter(const Box& ibox, std::vector<double>& c) {
     }
 }
 
-double findMin(const BM& bm, const double eps, const long long int maxstep, const int n_thr) {
 
+double findMin(const BM& bm, const double eps, const long long int maxstep, const int n_thr) {
     const int dim = bm.getDim();
     Box ibox;
     for (int i = 0; i < dim; i++) {
@@ -98,20 +109,24 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
                     getCenter(b, c);
                     double v = bm.calcFunc(c);
                     double rv;
-#pragma omp critical
-                    {
-                        if (v < recordVal) {
-                            recordVal = v;
-                            //recordVec = c;
-                        }
-                    }
+//                    double rv = gRecv.load(morder);
                     auto lb = bm.calcInterval(b).lb();
-
 #pragma omp atomic read
                     rv = recordVal;
-                    if (lb <= rv - eps && pool_size + step < maxstep)
-                        split(b, pool_new[thread_num]);
-
+                    if(v < rv) {
+#pragma omp critical
+{
+                    if(v < recordVal) {
+#pragma omp atomic write
+                       recordVal = v;
+                       rv = v;
+                       recordVec = c;
+                    }
+}
+}
+                    if (lb <= rv - eps && pool_size + step < maxstep) {
+                       split(b, pool_new[thread_num]);
+                    }
                 }
         }
         for (int i = 0; i < n_thr; i++) step += pool[i].size();
@@ -143,27 +158,28 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
     std::cout << " at x [ ";
     std::copy(recordVec.begin(), recordVec.end(), std::ostream_iterator<double>(std::cout, " "));
     std::cout << "]\n";
+
+    std::cout << bm.getDesc() << ":" <<step <<"\n";
+
     return recordVal;
 }
 
 bool testBench(const BM& bm) {
-    bool rv = true;
     std::cout << "*************Testing benchmark**********" << std::endl;
     std::cout << bm;
     double v = findMin(bm, gEps, gMaxStepsTotal, gProcs);
     double diff = v - bm.getGlobMinY();
     if (diff > gEps) {
-        rv = false;
         std::cout << "BnB failed for " << bm.getDesc() << " benchmark " << std::endl;
     }
     std::cout << "the difference is " << v - bm.getGlobMinY() << std::endl;
     std::cout << "****************************************" << std::endl << std::endl;
-    return rv;
 }
 
 main(int argc, char* argv[]) {
     std::string bench;
-    ParBenchmarks<double> tests;
+    Benchmarks<double> tests;
+
     if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
             std::cout << b->getDesc() << "\n";
@@ -180,8 +196,10 @@ main(int argc, char* argv[]) {
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
-    }
-    std::cout << "Openmp PBnB solver with " << std::endl;
+    }   
+        
+  std::cout << "Openmp PBnB solver with " << std::endl;
+  for(int z = 0; z < 1; z++)
     for (auto bm : tests) {
         if (bench == bm->getDesc())
             testBench(*bm);
