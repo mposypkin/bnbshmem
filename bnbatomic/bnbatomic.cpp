@@ -276,7 +276,7 @@ bool testBench(const BM& bm) {
 
 main(int argc, char* argv[]) {
     std::string bench;
-    ParBenchmarks<double> tests;
+    Benchmarks<double> tests;
     if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
             std::cout << b->getDesc() << "\n";
