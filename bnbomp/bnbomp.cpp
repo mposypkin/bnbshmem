@@ -44,7 +44,6 @@ const std::memory_order morder = std::memory_order_relaxed;
 #define EXCHNAGE_OPER compare_exchange_strong
 //#define EXCHNAGE_OPER compare_exchange_weak
 
-
 double len(const Interval<double>& I) {
     return I.rb() - I.lb();
 }
@@ -72,7 +71,6 @@ void getCenter(const Box& ibox, std::vector<double>& c) {
         c[i] = 0.5 * (ibox[i].lb() + ibox[i].rb());
     }
 }
-
 
 double findMin(const BM& bm, const double eps, const long long int maxstep, const int n_thr) {
     const int dim = bm.getDim();
@@ -109,23 +107,23 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
                     getCenter(b, c);
                     double v = bm.calcFunc(c);
                     double rv;
-//                    double rv = gRecv.load(morder);
+                    //                    double rv = gRecv.load(morder);
                     auto lb = bm.calcInterval(b).lb();
 #pragma omp atomic read
                     rv = recordVal;
-                    if(v < rv) {
+                    if (v < rv) {
 #pragma omp critical
-{
-                    if(v < recordVal) {
+                        {
+                            if (v < recordVal) {
 #pragma omp atomic write
-                       recordVal = v;
-                       rv = v;
-                       recordVec = c;
+                                recordVal = v;
+                                rv = v;
+                                recordVec = c;
+                            }
+                        }
                     }
-}
-}
                     if (lb <= rv - eps && pool_size + step < maxstep) {
-                       split(b, pool_new[thread_num]);
+                        split(b, pool_new[thread_num]);
                     }
                 }
         }
@@ -159,26 +157,34 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
     std::copy(recordVec.begin(), recordVec.end(), std::ostream_iterator<double>(std::cout, " "));
     std::cout << "]\n";
 
-    std::cout << bm.getDesc() << ":" <<step <<"\n";
+    std::cout << bm.getDesc() << ":" << step << "\n";
 
     return recordVal;
 }
 
 bool testBench(const BM& bm) {
+    bool rv = true;
     std::cout << "*************Testing benchmark**********" << std::endl;
     std::cout << bm;
     double v = findMin(bm, gEps, gMaxStepsTotal, gProcs);
     double diff = v - bm.getGlobMinY();
     if (diff > gEps) {
         std::cout << "BnB failed for " << bm.getDesc() << " benchmark " << std::endl;
+        rv = false;
     }
     std::cout << "the difference is " << v - bm.getGlobMinY() << std::endl;
     std::cout << "****************************************" << std::endl << std::endl;
+    return rv;
 }
 
-main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {
     std::string bench;
+#if 0    
     Benchmarks<double> tests;
+#else 
+    ParBenchmarks<double> tests;
+#endif    
+
 
     if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
@@ -196,12 +202,12 @@ main(int argc, char* argv[]) {
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
-    }   
-        
-  std::cout << "Openmp PBnB solver with " << std::endl;
-  for(int z = 0; z < 1; z++)
-    for (auto bm : tests) {
-        if (bench == bm->getDesc())
-            testBench(*bm);
     }
+
+    std::cout << "Openmp PBnB solver with " << std::endl;
+    for (int z = 0; z < 1; z++)
+        for (auto bm : tests) {
+            if (bench == bm->getDesc())
+                testBench(*bm);
+        }
 }

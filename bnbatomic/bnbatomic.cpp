@@ -274,9 +274,15 @@ bool testBench(const BM& bm) {
     return rv;
 }
 
-main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {
     std::string bench;
+#if 0    
     Benchmarks<double> tests;
+#else 
+    ParBenchmarks<double> tests;
+#endif    
+
+
     if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
             std::cout << b->getDesc() << "\n";

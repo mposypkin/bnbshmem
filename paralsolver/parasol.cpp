@@ -50,7 +50,6 @@ static int gMtStepsLimit = 1000;
 
 std::atomic<double> gRecord;
 
-
 /**
  * BnB state
  */
@@ -68,7 +67,8 @@ struct State {
     mPool(st.mPool),
     mRemainingSteps(st.mRemainingSteps),
     mStatus(st.mStatus.load()),
-    mMutex() {}
+    mMutex() {
+    }
 
     State& operator=(const State& st) {
         mRecordVal = st.mRecordVal;
@@ -90,7 +90,7 @@ struct State {
     }
 
     bool hasResources() {
-        return ! mPool.empty() && (mRemainingSteps > 0);
+        return !mPool.empty() && (mRemainingSteps > 0);
     }
 
     void printResourses() {
@@ -361,7 +361,7 @@ void solve(std::shared_ptr<State> init_s, const BM& bm) {
                 gNotifier.resolve();
 
                 bool flag = try_assign_run(init_s, cur_state, bm);
-                if (! flag) {
+                if (!flag) {
                     gThreadList.addReadyState(cur_state);
                 }
                 continue;
@@ -485,7 +485,7 @@ bool testBench(const BM& bm) {
 
 void printHelp(std::string bin_name) {
     std::cout << "Usage: " << bin_name << " '<name_of_bench>' <eps max_steps> <virtual_procs_number> <split_steps_limit> "
-                                          "<split_subs_limit> <split_steps_coeff> <split_subs_coeff>\n\n";
+            "<split_subs_limit> <split_steps_coeff> <split_subs_coeff>\n\n";
     std::cout << "to run all tests run\n";
     std::cout << bin_name << std::endl << std::endl;
     std::cout << "to list benchmarks run:\n";
@@ -496,7 +496,12 @@ void printHelp(std::string bin_name) {
 
 int main(int argc, char** argv) {
     std::string bench;
+#if 0    
     Benchmarks<double> tests;
+#else 
+    ParBenchmarks<double> tests;
+#endif    
+
     if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
             std::cout << b->getDesc() << "\n";
