@@ -26,6 +26,7 @@
 #include <condition_variable>
 
 #include <common/parbench.hpp>
+#include <common/bnbstat.hpp>
 
 using BM = Benchmark<double>;
 using Box = std::vector<Interval<double>>;
@@ -49,6 +50,8 @@ static int gProcs = 4;
 static int gMtStepsLimit = 1000;
 
 std::atomic<double> gRecord;
+
+std::vector<BnBStat> stat;
 
 /**
  * BnB state
@@ -445,6 +448,9 @@ double findMin(const BM& bm) {
     std::cout << " at x [ ";
     std::copy(s->mRecord.begin(), s->mRecord.end(), std::ostream_iterator<double>(std::cout, " "));
     std::cout << "]\n";
+
+    stat.emplace_back((double) mseconds, steps);
+
     return gRecord.load();
 }
 
@@ -483,16 +489,7 @@ bool testBench(const BM& bm) {
     return res_flag;
 }
 
-void printHelp(std::string bin_name) {
-    std::cout << "Usage: " << bin_name << " '<name_of_bench>' <eps max_steps> <virtual_procs_number> <split_steps_limit> "
-            "<split_subs_limit> <split_steps_coeff> <split_subs_coeff>\n\n";
-    std::cout << "to run all tests run\n";
-    std::cout << bin_name << std::endl << std::endl;
-    std::cout << "to list benchmarks run:\n";
-    std::cout << bin_name << " list\n\n";
-    std::cout << "to see this message run\n";
-    std::cout << bin_name << " --help\n";
-}
+
 
 int main(int argc, char** argv) {
     std::string bench;
@@ -501,30 +498,34 @@ int main(int argc, char** argv) {
 #else 
     ParBenchmarks<double> tests;
 #endif    
+    int nruns = 0;
 
     if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
             std::cout << b->getDesc() << "\n";
         }
         return 0;
-    } else if (argc == 10) {
-        bench = argv[1];
-        gKnrec = argv[2];
-        gEps = atof(argv[3]);
-        gMaxStepsTotal = atoi(argv[4]);
-        gProcs = atoi(argv[5]);
-        gStepsSplitCoeff = atof(argv[6]);
-        gSubsSplitCoeff = atof(argv[7]);
-        gMtStepsLimit = atoi(argv[8]);
-        gMtSubsLimit = atoi(argv[9]);
+    } else if (argc == 11) {
+        nruns = atoi(argv[1]);
+        bench = argv[2];
+        gKnrec = argv[3];
+        gEps = atof(argv[4]);
+        gMaxStepsTotal = atoi(argv[5]);
+        gProcs = atoi(argv[6]);
+        gStepsSplitCoeff = atof(argv[7]);
+        gSubsSplitCoeff = atof(argv[8]);
+        gMtStepsLimit = atoi(argv[9]);
+        gMtSubsLimit = atoi(argv[10]);
     } else {
-        std::cerr << "Usage: " << argv[0] << " name_of_bench knrec|unknrec eps max_steps thread_count steps_split_coeff subs_split_coeff step_limit subs_limit\n";
+        std::cerr << "Usage: " << argv[0] << "num_of_runs name_of_bench knrec|unknrec eps max_steps thread_count steps_split_coeff subs_split_coeff step_limit subs_limit\n";
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
     }
-    for (auto bm : tests) {
-        if (bench == bm->getDesc())
-            testBench(*bm);
-    }
+    for (int z = 0; z < nruns; z++)
+        for (auto bm : tests) {
+            if (bench == bm->getDesc())
+                testBench(*bm);
+        }
+    std::cout << "Statistics:\n" << stat;
 }

@@ -18,8 +18,10 @@
 #include <chrono>
 #include <omp.h>
 #include <sys/time.h>
-#include <common/parbench.hpp>
 #include <algorithm>
+
+#include <common/parbench.hpp>
+#include <common/bnbstat.hpp>
 
 static int gMaxStepsTotal;
 
@@ -34,8 +36,7 @@ static double gEps;
 using BM = Benchmark<double>;
 using Box = std::vector<Interval<double>>;
 
-std::atomic<double> gRecv;
-
+std::vector<BnBStat> stat;
 
 
 //const std::memory_order morder = std::memory_order_seq_cst;
@@ -90,11 +91,11 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
         recordVal = std::numeric_limits<double>::max();
     }
 
-    long long int step = 0;
+    long long int steps = 0;
     long long pool_size = 0;
     const auto start = std::chrono::system_clock::now();
     while (true) {
-#pragma omp parallel shared(pool, pool_new, recordVec, recordVal, step, pool_size) firstprivate(c) num_threads(n_thr)
+#pragma omp parallel shared(pool, pool_new, recordVec, recordVal, steps, pool_size) firstprivate(c) num_threads(n_thr)
         {
 #pragma omp for 
             for (int i = 0; i < n_thr; i++) pool_new[i].clear();
@@ -122,21 +123,21 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
                             }
                         }
                     }
-                    if (lb <= rv - eps && pool_size + step < maxstep) {
+                    if (lb <= rv - eps && pool_size + steps < maxstep) {
                         split(b, pool_new[thread_num]);
                     }
                 }
         }
-        for (int i = 0; i < n_thr; i++) step += pool[i].size();
-        if (step >= maxstep) break;
+        for (int i = 0; i < n_thr; i++) steps += pool[i].size();
+        if (steps >= maxstep) break;
         pool_size = 0;
         for (int i = 0; i < n_thr; i++) pool_size += pool_new[i].size();
         if (pool_size == 0) break;
-        if (pool_size + step >= maxstep) {
+        if (pool_size + steps >= maxstep) {
             pool_size = 0;
             for (int i = 0; i < n_thr; i++) {
-                if (pool_size + pool_new[i].size() + step > maxstep) {
-                    pool_new[i].erase(pool_new[i].begin() + maxstep - step - pool_size, pool_new[i].end());
+                if (pool_size + pool_new[i].size() + steps > maxstep) {
+                    pool_new[i].erase(pool_new[i].begin() + maxstep - steps - pool_size, pool_new[i].end());
                 }
                 pool_size += pool_new[i].size();
             }
@@ -146,19 +147,20 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
     auto end = std::chrono::system_clock::now();
     unsigned long int mseconds = (std::chrono::duration_cast<std::chrono::microseconds> (end - start)).count();
     std::cout << "Time: " << mseconds << " microsecond\n";
-    std::cout << "Time per subproblem: " << (double) mseconds / (double) step << " miscroseconds." << std::endl;
-    if (step >= gMaxStepsTotal) {
+    std::cout << "Time per subproblem: " << (double) mseconds / (double) steps << " miscroseconds." << std::endl;
+    if (steps >= gMaxStepsTotal) {
         std::cout << "Failed to converge in " << gMaxStepsTotal << " steps\n";
     } else {
-        std::cout << "Converged in " << step << " steps\n";
+        std::cout << "Converged in " << steps << " steps\n";
     }
     std::cout << "BnB found = " << recordVal << std::endl;
     std::cout << " at x [ ";
     std::copy(recordVec.begin(), recordVec.end(), std::ostream_iterator<double>(std::cout, " "));
     std::cout << "]\n";
 
-    std::cout << bm.getDesc() << ":" << step << "\n";
+    std::cout << bm.getDesc() << ":" << steps << "\n";
 
+    stat.emplace_back((double) mseconds, steps);
     return recordVal;
 }
 
@@ -179,7 +181,8 @@ bool testBench(const BM& bm) {
 
 int main(int argc, char* argv[]) {
     std::string bench;
-#if 0    
+    int nruns;
+#if 0   
     Benchmarks<double> tests;
 #else 
     ParBenchmarks<double> tests;
@@ -191,23 +194,28 @@ int main(int argc, char* argv[]) {
             std::cout << b->getDesc() << "\n";
         }
         return 0;
-    } else if (argc == 6) {
-        bench = argv[1];
-        gKnrec = argv[2];
-        gEps = atof(argv[3]);
-        gMaxStepsTotal = atoi(argv[4]);
-        gProcs = atoi(argv[5]);
+    } else if (argc == 7) {
+        nruns = atoi(argv[1]);
+        bench = argv[2];
+        gKnrec = argv[3];
+        gEps = atof(argv[4]);
+        gMaxStepsTotal = atoi(argv[5]);
+        gProcs = atoi(argv[6]);
     } else {
-        std::cerr << "Usage: " << argv[0] << " name_of_bench knrec|unknrec eps max_steps omp_thread_number\n";
+        std::cerr << "Usage: " << argv[0] << " num_of_runs name_of_bench knrec|unknrec eps max_steps omp_thread_number\n";
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
     }
 
     std::cout << "Openmp PBnB solver with " << std::endl;
-    for (int z = 0; z < 1; z++)
+    for (int z = 0; z < nruns; z++)
         for (auto bm : tests) {
             if (bench == bm->getDesc())
                 testBench(*bm);
         }
+
+
+    std::cout << "Statistics:\n" << stat;
+
 }

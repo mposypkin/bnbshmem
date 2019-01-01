@@ -19,6 +19,7 @@
 #include <thread>
 #include <chrono>
 #include <common/parbench.hpp>
+#include <common/bnbstat.hpp>
 
 using BM = Benchmark<double>;
 using Box = std::vector<Interval<double>>;
@@ -37,7 +38,7 @@ constexpr char knownRecord[] = "knrec";
 
 std::atomic<double> gRecv;
 
-
+std::vector<BnBStat> stat;
 
 //const std::memory_order morder = std::memory_order_seq_cst;
 const std::memory_order morder = std::memory_order_relaxed;
@@ -255,6 +256,7 @@ double findMin(const BM& bm) {
     std::cout << " at x [ ";
     std::copy(s.mRecord.begin(), s.mRecord.end(), std::ostream_iterator<double>(std::cout, " "));
     std::cout << "]\n";
+    stat.emplace_back((double) mseconds, s.mSteps);
     return s.mRecordVal;
 }
 
@@ -282,21 +284,23 @@ int main(int argc, char* argv[]) {
     ParBenchmarks<double> tests;
 #endif    
 
+    int nruns = 0;
 
     if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
             std::cout << b->getDesc() << "\n";
         }
         return 0;
-    } else if (argc == 7) {
-        bench = argv[1];
-        gKnrec = argv[2];
-        gEps = atof(argv[3]);
-        gMaxStepsTotal = atoi(argv[4]);
-        gProcs = atoi(argv[5]);
-        gMtStepsLimit = atoi(argv[6]);
+    } else if (argc == 8) {
+        nruns = atoi(argv[1]);
+        bench = argv[2];
+        gKnrec = argv[3];
+        gEps = atof(argv[4]);
+        gMaxStepsTotal = atoi(argv[5]);
+        gProcs = atoi(argv[6]);
+        gMtStepsLimit = atoi(argv[7]);
     } else {
-        std::cerr << "Usage: " << argv[0] << " name_of_bench knrec|unknrec eps max_steps virtual_procs_number parallel_steps_limit\n";
+        std::cerr << "Usage: " << argv[0] << " number_of_runs name_of_bench knrec|unknrec eps max_steps virtual_procs_number parallel_steps_limit\n";
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
@@ -307,9 +311,11 @@ int main(int argc, char* argv[]) {
     PowellSingular2Benchmark<double> pb(8);
     testBench(pb);
 #else        
-    for (auto bm : tests) {
-        if (bench == bm->getDesc())
-            testBench(*bm);
-    }
-#endif    
+    for (int z = 0; z < nruns; z++)
+        for (auto bm : tests) {
+            if (bench == bm->getDesc())
+                testBench(*bm);
+        }
+#endif   
+    std::cout << "Statistics:\n" << stat;
 }

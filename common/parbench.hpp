@@ -30,6 +30,7 @@ public:
         clear();
         add(std::make_shared<Cluster2D2Benchmark<double>>());
         add(std::make_shared<Hartman6Benchmark<double>>());
+        add(std::make_shared<BiggsEXP6Benchmark<double>>());
     }
 
     void clear() {
