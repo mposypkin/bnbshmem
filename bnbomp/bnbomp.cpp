@@ -21,7 +21,9 @@
 #include <algorithm>
 
 #include <common/parbench.hpp>
+#include <common/bnbiutils.hpp>
 #include <common/bnbstat.hpp>
+
 
 static int gMaxStepsTotal;
 
@@ -33,45 +35,8 @@ constexpr char knownRecord[] = "knrec";
 
 static double gEps;
 
-using BM = Benchmark<double>;
-using Box = std::vector<Interval<double>>;
-
 std::vector<BnBStat> stat;
 
-
-//const std::memory_order morder = std::memory_order_seq_cst;
-const std::memory_order morder = std::memory_order_relaxed;
-
-#define EXCHNAGE_OPER compare_exchange_strong
-//#define EXCHNAGE_OPER compare_exchange_weak
-
-double len(const Interval<double>& I) {
-    return I.rb() - I.lb();
-}
-
-void split(const Box& ibox, std::vector<Box>& v) {
-    auto result = std::max_element(ibox.begin(), ibox.end(),
-            [](const Interval<double>& f, const Interval<double>& s) {
-                return len(f) < len(s);
-            });
-    const int i = result - ibox.begin();
-    const double maxlen = len(ibox[i]);
-    Box b1(ibox);
-    Interval<double> ilow(ibox[i].lb(), ibox[i].lb() + 0.5 * maxlen);
-    b1[i] = ilow;
-    Box b2(ibox);
-    Interval<double> iupper(ibox[i].lb() + 0.5 * maxlen, ibox[i].rb());
-    b2[i] = iupper;
-    v.push_back(std::move(b1));
-    v.push_back(std::move(b2));
-}
-
-void getCenter(const Box& ibox, std::vector<double>& c) {
-    const int n = ibox.size();
-    for (int i = 0; i < n; i++) {
-        c[i] = 0.5 * (ibox[i].lb() + ibox[i].rb());
-    }
-}
 
 double findMin(const BM& bm, const double eps, const long long int maxstep, const int n_thr) {
     const int dim = bm.getDim();

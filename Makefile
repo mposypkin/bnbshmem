@@ -2,6 +2,7 @@ all dep clean indent tests::
 	cd paralsolver && $(MAKE) $@ && cd .. 
 	cd bnbatomic && $(MAKE) $@ && cd ..
 	cd bnbomp && $(MAKE) $@ && cd ..
+	cd lpamigo && $(MAKE) $@ && cd ..
 
 doc: indent doxy
 

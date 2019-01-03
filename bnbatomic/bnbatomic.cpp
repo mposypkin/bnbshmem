@@ -19,10 +19,9 @@
 #include <thread>
 #include <chrono>
 #include <common/parbench.hpp>
+#include <common/bnbiutils.hpp>
 #include <common/bnbstat.hpp>
 
-using BM = Benchmark<double>;
-using Box = std::vector<Interval<double>>;
 
 static int gProcs = 8;
 
@@ -108,33 +107,6 @@ std::ostream& operator<<(std::ostream & out, const State s) {
     return out;
 }
 
-double len(const Interval<double>& I) {
-    return I.rb() - I.lb();
-}
-
-void split(const Box& ibox, std::vector<Box>& v) {
-    auto result = std::max_element(ibox.begin(), ibox.end(),
-            [](const Interval<double>& f, const Interval<double>& s) {
-                return len(f) < len(s);
-            });
-    const int i = result - ibox.begin();
-    const double maxlen = len(ibox[i]);
-    Box b1(ibox);
-    Interval<double> ilow(ibox[i].lb(), ibox[i].lb() + 0.5 * maxlen);
-    b1[i] = ilow;
-    Box b2(ibox);
-    Interval<double> iupper(ibox[i].lb() + 0.5 * maxlen, ibox[i].rb());
-    b2[i] = iupper;
-    v.push_back(std::move(b1));
-    v.push_back(std::move(b2));
-}
-
-void getCenter(const Box& ibox, std::vector<double>& c) {
-    const int n = ibox.size();
-    for (int i = 0; i < n; i++) {
-        c[i] = 0.5 * (ibox[i].lb() + ibox[i].rb());
-    }
-}
 
 void solveSerial(State& s, const BM& bm) {
     const int dim = bm.getDim();

@@ -26,10 +26,9 @@
 #include <condition_variable>
 
 #include <common/parbench.hpp>
+#include <common/bnbiutils.hpp>
 #include <common/bnbstat.hpp>
 
-using BM = Benchmark<double>;
-using Box = std::vector<Interval<double>>;
 
 constexpr char gKnownRecord[] = "knrec";
 
@@ -270,9 +269,6 @@ std::ostream& operator<<(std::ostream & out, const std::shared_ptr<State> s) {
     return out;
 }
 
-double len(const Interval<double>& I) {
-    return I.rb() - I.lb();
-}
 
 void split(const Box& ibox, std::shared_ptr<State> s) {
     auto result = std::max_element(ibox.begin(), ibox.end(),
@@ -294,12 +290,6 @@ void split(const Box& ibox, std::shared_ptr<State> s) {
     s->mPool.push_back(std::move(b2));
 }
 
-void getCenter(const Box& ibox, std::vector<double>& c) {
-    const int n = ibox.size();
-    for (int i = 0; i < n; i++) {
-        c[i] = 0.5 * (ibox[i].lb() + ibox[i].rb());
-    }
-}
 
 void solveSerial(std::shared_ptr<State> s, const BM& bm) {
     const int dim = bm.getDim();
