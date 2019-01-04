@@ -70,7 +70,7 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
                 for (long long int j = 0; j < pool[i].size(); j++) {
                     const int thread_num = omp_get_thread_num();
                     Box b = pool[i][j];
-                    getCenter(b, c);
+                    mid(b, c);
                     double v = bm.calcFunc(c);
                     double rv;
                     //                    double rv = gRecv.load(morder);

@@ -3,6 +3,7 @@ all dep clean indent tests::
 	cd bnbatomic && $(MAKE) $@ && cd ..
 	cd bnbomp && $(MAKE) $@ && cd ..
 	cd lpamigo && $(MAKE) $@ && cd ..
+	cd gpamigo && $(MAKE) $@ && cd ..
 
 doc: indent doxy
 

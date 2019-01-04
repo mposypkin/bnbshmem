@@ -273,10 +273,10 @@ std::ostream& operator<<(std::ostream & out, const std::shared_ptr<State> s) {
 void split(const Box& ibox, std::shared_ptr<State> s) {
     auto result = std::max_element(ibox.begin(), ibox.end(),
             [](const Interval<double>& f, const Interval<double>& s) {
-                return len(f) < len(s);
+                return wid(f) < wid(s);
             });
     const int i = result - ibox.begin();
-    const double maxlen = len(ibox[i]);
+    const double maxlen = wid(ibox[i]);
     Box b1(ibox);
     Interval<double> ilow(ibox[i].lb(), ibox[i].lb() + 0.5 * maxlen);
     b1[i] = ilow;
@@ -297,7 +297,7 @@ void solveSerial(std::shared_ptr<State> s, const BM& bm) {
 
     while (s->hasResources()) {
         Box b = s->getSub();
-        getCenter(b, c);
+        mid(b, c);
         double v = bm.calcFunc(c);
         double rv = gRecord.load();
         while (v < rv) {

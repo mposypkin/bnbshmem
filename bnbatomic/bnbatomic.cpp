@@ -115,7 +115,7 @@ void solveSerial(State& s, const BM& bm) {
         s.mSteps++;
         Box b = s.mPool.back();
         s.mPool.pop_back();
-        getCenter(b, c);
+        mid(b, c);
         double v = bm.calcFunc(c);
         double rv = gRecv.load(morder);
         while (v < rv) {
@@ -143,7 +143,7 @@ void solve(State& s, const BM& bm) {
                 s.mSteps++;
                 Box b = s.mPool.back();
                 s.mPool.pop_back();
-                getCenter(b, c);
+                mid(b, c);
                 double v = bm.calcFunc(c);
                 double rv = gRecv.load(morder);
                 while (v < rv) {

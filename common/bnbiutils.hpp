@@ -28,7 +28,7 @@ using Box = std::vector<Interval<double>>;
  * @param I
  * @return width of the interval
  */
-double len(const Interval<double>& I) {
+double wid(const Interval<double>& I) {
     return I.rb() - I.lb();
 }
 
@@ -37,7 +37,7 @@ double len(const Interval<double>& I) {
  * @param ibox the box
  * @param c the computed center
  */
-void getCenter(const Box& ibox, std::vector<double>& c) {
+void mid(const Box& ibox, std::vector<double>& c) {
     const int n = ibox.size();
     for (int i = 0; i < n; i++) {
         c[i] = 0.5 * (ibox[i].lb() + ibox[i].rb());
@@ -52,10 +52,10 @@ void getCenter(const Box& ibox, std::vector<double>& c) {
 void split(const Box& ibox, std::vector<Box>& v) {
     auto result = std::max_element(ibox.begin(), ibox.end(),
             [](const Interval<double>& f, const Interval<double>& s) {
-                return len(f) < len(s);
+                return wid(f) < wid(s);
             });
     const int i = result - ibox.begin();
-    const double maxlen = len(ibox[i]);
+    const double maxlen = wid(ibox[i]);
     Box b1(ibox);
     Interval<double> ilow(ibox[i].lb(), ibox[i].lb() + 0.5 * maxlen);
     b1[i] = ilow;

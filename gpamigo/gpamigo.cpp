@@ -1,5 +1,5 @@
 /*
- * A  multithreaded interval-based bnb solver L-PAMIGO motivated by 
+ * A  multithreaded interval-based bnb solver Global-PAMIGO motivated by 
  * Branch-and-Bound interval global optimization on shared memory multiprocessors by  L. G. Casado J. A. Martínez I. García E. M. T. Hendrix 
  */
 
@@ -60,24 +60,6 @@ const std::memory_order morder = std::memory_order_seq_cst;
 //#define EXCHNAGE_OPER compare_exchange_weak
 
 struct State {
-
-    void merge(const State& s) {
-        mPool.insert(mPool.end(), s.mPool.begin(), s.mPool.end());
-    }
-
-    void split(State& s) {
-        int k = 0;
-        for (auto i = mPool.begin(); i != mPool.end();) {
-            if (k % 2) {
-                s.mPool.push_back(*i);
-                i = mPool.erase(i);
-            } else
-                i++;
-            k++;
-        }
-
-    }
-
     std::vector<Box> mPool;
 };
 
@@ -89,26 +71,28 @@ void updateRecord(double rv, const std::vector<double> & record) {
     }
 }
 
-void solve(std::shared_ptr<State> s, const BM& bm) {
+void solve(State& s, const BM& bm) {
     const int dim = bm.getDim();
     std::vector<double> c(dim);
     double locRecv = std::numeric_limits<double>::max();
     std::vector<double> locRecord;
     int steps = 0;
-    while (!s->mPool.empty()) {
+    while (true) {
         steps++;
-        if (s->mPool.size() >= 2) {
-            if (gNumWaitThreads < gProcs) {
-                std::lock_guard<std::mutex> lock(gPoolLock);
-                auto sn = std::make_shared<State>();
-                s->split(*sn);
-                std::thread th(solve, sn, std::cref<BM>(bm));
-                th.detach();
-                gNumWaitThreads++;
+        Box b;
+        {
+            std::unique_lock<std::mutex> lock(gPoolLock);
+            gNumWaitThreads++;
+            while (s.mPool.empty() && (gNumWaitThreads < gProcs))
+                gPoolCV.wait(lock);
+            if (s.mPool.empty()) {
+                gPoolCV.notify_one();
+                break;
             }
+            b = s.mPool.back();
+            s.mPool.pop_back();
+            gNumWaitThreads--;
         }
-        Box b = s->mPool.back();
-        s->mPool.pop_back();
         mid(b, c);
         double v = bm.calcFunc(c);
         if (v < locRecv) {
@@ -121,14 +105,13 @@ void solve(std::shared_ptr<State> s, const BM& bm) {
         }
         auto lb = bm.calcInterval(b).lb();
         if (lb <= gRecv.load(morder) - gEps) {
-            split(b, s->mPool);
+            std::unique_lock<std::mutex> lock(gPoolLock);
+            split(b, s.mPool);
+            gPoolCV.notify_all();
         }
     }
     updateRecord(locRecv, locRecord);
     gSteps += steps;
-    std::unique_lock<std::mutex> lock(gPoolLock);
-    gNumWaitThreads--;
-    gPoolCV.notify_one();
 }
 
 double findMin(const BM& bm) {
@@ -137,8 +120,8 @@ double findMin(const BM& bm) {
     for (int i = 0; i < dim; i++) {
         ibox.emplace_back(bm.getBounds()[i].first, bm.getBounds()[i].second);
     }
-    auto s = std::make_shared<State>();
-    s->mPool.push_back(ibox);
+    State s;
+    s.mPool.push_back(ibox);
     if (gKnrec == std::string(knownRecord)) {
         gRecv = bm.getGlobMinY();
     } else {
@@ -147,19 +130,15 @@ double findMin(const BM& bm) {
 
     std::chrono::time_point<std::chrono::system_clock> start, end;
     start = std::chrono::system_clock::now();
-#if 0   
-    solveSerial(s, bm, eps);
-#else    
-    gNumWaitThreads = 1;
-    solve(s, bm);
-    {
-        std::unique_lock<std::mutex> lock(gPoolLock);
-        gPoolCV.wait(lock, []() {
-            return gNumWaitThreads == 0;
-        });
-        std::cout << "==" << gNumWaitThreads << "==\n";
+    gNumWaitThreads = 0;
+    std::vector<std::thread> threads;
+    for(int i = 0; i < gProcs; i ++) {
+        threads.emplace_back(solve, std::ref(s), std::cref(bm));
     }
-#endif
+    for(auto & t : threads) {
+        t.join();
+    }
+
     end = std::chrono::system_clock::now();
     int mseconds = (std::chrono::duration_cast<std::chrono::microseconds> (end - start)).count();
     std::cout << "Time: " << mseconds << " microsecond\n";
