@@ -144,7 +144,7 @@ double findMin(const BM& bm) {
     } else {
         gRecv = std::numeric_limits<double>::max();
     }
-
+    gSteps = 0;
     std::chrono::time_point<std::chrono::system_clock> start, end;
     start = std::chrono::system_clock::now();
 #if 0   
@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
         std::cerr << argv[0] << " list\n";
         return -1;
     }
-    std::cout << "Local PAMIGO BnB solver with np = " << gProcs << "\n";
+    std::cout << "Global PAMIGO BnB solver with np = " << gProcs << "\n";
     std::cout << "record is " << (gRecv.is_lock_free() ? "lock free" : "not lock free") << std::endl;
 #if 0    
     PowellSingular2Benchmark<double> pb(8);

@@ -129,9 +129,10 @@ double findMin(const BM& bm) {
     }
 
     std::chrono::time_point<std::chrono::system_clock> start, end;
-    start = std::chrono::system_clock::now();
     gNumWaitThreads = 0;
+    gSteps = 0;
     std::vector<std::thread> threads;
+    start = std::chrono::system_clock::now();
     for(int i = 0; i < gProcs; i ++) {
         threads.emplace_back(solve, std::ref(s), std::cref(bm));
     }
