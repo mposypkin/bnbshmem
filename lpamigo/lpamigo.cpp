@@ -31,6 +31,8 @@ using Box = std::vector<Interval<double>>;
 
 static int gProcs = 8;
 
+static int gMaxStepsTotal = 0;
+
 static double gEps;
 
 static std::string gKnrec;
@@ -94,9 +96,10 @@ void solve(std::shared_ptr<State> s, const BM& bm) {
     std::vector<double> c(dim);
     double locRecv = std::numeric_limits<double>::max();
     std::vector<double> locRecord;
-    int steps = 0;
     while (!s->mPool.empty()) {
-        steps++;
+        if(gSteps >= gMaxStepsTotal)
+            break;
+        gSteps ++;
         if (s->mPool.size() >= 2) {
             if (gNumWaitThreads < gProcs) {
                 std::lock_guard<std::mutex> lock(gPoolLock);
@@ -125,7 +128,6 @@ void solve(std::shared_ptr<State> s, const BM& bm) {
         }
     }
     updateRecord(locRecv, locRecord);
-    gSteps += steps;
     std::unique_lock<std::mutex> lock(gPoolLock);
     gNumWaitThreads--;
     gPoolCV.notify_one();
@@ -164,7 +166,11 @@ double findMin(const BM& bm) {
     int mseconds = (std::chrono::duration_cast<std::chrono::microseconds> (end - start)).count();
     std::cout << "Time: " << mseconds << " microsecond\n";
     std::cout << "Time per subproblem: " << (double) mseconds / (double) gSteps << " miscroseconds." << std::endl;
-    std::cout << "Converged in " << gSteps << " steps\n";
+    if (gSteps >= gMaxStepsTotal) {
+        std::cout << "Failed to converge in " << gMaxStepsTotal << " steps\n";
+    } else {
+        std::cout << "Converged in " << gSteps << " steps\n";
+    }
 
     std::cout << "BnB found = " << gRecv << std::endl;
     std::cout << " at x [ ";
@@ -205,14 +211,15 @@ int main(int argc, char* argv[]) {
             std::cout << b->getDesc() << "\n";
         }
         return 0;
-    } else if (argc == 6) {
+    } else if (argc == 7) {
         nruns = atoi(argv[1]);
         bench = argv[2];
         gKnrec = argv[3];
         gEps = atof(argv[4]);
-        gProcs = atoi(argv[5]);
+        gMaxStepsTotal = atoi(argv[5]);
+        gProcs = atoi(argv[6]);
     } else {
-        std::cerr << "Usage: " << argv[0] << " number_of_runs name_of_bench knrec|unknrec eps virtual_procs_number\n";
+        std::cerr << "Usage: " << argv[0] << " number_of_runs name_of_bench knrec|unknrec eps max_steps virtual_procs_number\n";
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
