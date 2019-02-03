@@ -17,6 +17,7 @@
 #include <iterator>
 #include <functional>
 #include <thread>
+#include <mutex>
 #include <chrono>
 #include <common/parbench.hpp>
 #include <common/bnbiutils.hpp>
@@ -37,6 +38,12 @@ constexpr char knownRecord[] = "knrec";
 
 std::atomic<double> gRecv;
 
+std::vector<double> gRecord;
+
+std::atomic_int gNumRecUpdates;
+
+std::mutex gMutex;
+
 std::vector<BnBStat> stat;
 
 //const std::memory_order morder = std::memory_order_seq_cst;
@@ -49,10 +56,6 @@ struct State {
 
     void merge(const State& s) {
         mSteps += s.mSteps;
-        if (s.mRecordVal < mRecordVal) {
-            mRecordVal = s.mRecordVal;
-            mRecord = s.mRecord;
-        }
         mPool.insert(mPool.end(), s.mPool.begin(), s.mPool.end());
     }
 
@@ -63,11 +66,6 @@ struct State {
         s1.mProcs = mProcs / 2;
         s2.mProcs = mProcs - s1.mProcs;
 
-        s1.mRecord = mRecord;
-        s2.mRecord = mRecord;
-
-        s1.mRecordVal = mRecordVal;
-        s2.mRecordVal = mRecordVal;
         while (true) {
             if (mPool.empty())
                 break;
@@ -80,10 +78,6 @@ struct State {
         }
     }
 
-    double mRecordVal;
-
-    std::vector<double> mRecord;
-
     std::vector<Box> mPool;
 
     int mMaxSteps;
@@ -94,19 +88,21 @@ struct State {
 };
 
 std::ostream& operator<<(std::ostream & out, const State s) {
-    out << "\"recval\" : " << s.mRecordVal << "\n";
-    out << "\"record\" : [";
-    for (int i = 0; i < s.mRecord.size(); i++) {
-        out << s.mRecord[i];
-        if (i != s.mRecord.size() - 1)
-            out << ", ";
-    }
-    out << "]\n";
     out << "\"steps\" :" << s.mSteps << "\n";
     out << "\"max steps\" :" << s.mMaxSteps << "\n";
     return out;
 }
 
+void updateRecord(double newrv, const std::vector<double> &record) {
+    double rv = gRecv.load(morder);
+    while (newrv < rv) {
+        std::lock_guard<std::mutex> lock(gMutex);
+        gNumRecUpdates ++;
+        if (gRecv.EXCHNAGE_OPER(rv, newrv, morder)) {
+            gRecord = record;
+        }
+    }
+}
 
 void solveSerial(State& s, const BM& bm) {
     const int dim = bm.getDim();
@@ -117,12 +113,7 @@ void solveSerial(State& s, const BM& bm) {
         s.mPool.pop_back();
         mid(b, c);
         double v = bm.calcFunc(c);
-        double rv = gRecv.load(morder);
-        while (v < rv) {
-            gRecv.EXCHNAGE_OPER(rv, v, morder);
-            s.mRecordVal = v;
-            s.mRecord = c;
-        }
+        updateRecord(v, c);
         auto lb = bm.calcInterval(b).lb();
         if (lb <= gRecv - gEps) {
             split(b, s.mPool);
@@ -145,12 +136,7 @@ void solve(State& s, const BM& bm) {
                 s.mPool.pop_back();
                 mid(b, c);
                 double v = bm.calcFunc(c);
-                double rv = gRecv.load(morder);
-                while (v < rv) {
-                    gRecv.EXCHNAGE_OPER(rv, v, morder);
-                    s.mRecordVal = v;
-                    s.mRecord = c;
-                }
+                updateRecord(v, c);
                 auto lb = bm.calcInterval(b).lb();
                 if (lb <= gRecv - gEps) {
                     split(b, s.mPool);
@@ -200,11 +186,11 @@ double findMin(const BM& bm) {
     State s;
     s.mPool.push_back(ibox);
     if (gKnrec == std::string(knownRecord)) {
-        s.mRecordVal = bm.getGlobMinY();
+        gRecv = bm.getGlobMinY();
     } else {
-        s.mRecordVal = std::numeric_limits<double>::max();
+        gRecv = std::numeric_limits<double>::max();
     }
-    gRecv = s.mRecordVal;
+    gNumRecUpdates = 0;
     s.mMaxSteps = gMaxStepsTotal;
     s.mProcs = gProcs;
     std::chrono::time_point<std::chrono::system_clock> start, end;
@@ -223,13 +209,13 @@ double findMin(const BM& bm) {
     } else {
         std::cout << "Converged in " << s.mSteps << " steps\n";
     }
-
-    std::cout << "BnB found = " << s.mRecordVal << std::endl;
+    std::cout << "Number of record updates: " << gNumRecUpdates << "\n";
+    std::cout << "BnB found = " << gRecv << std::endl;
     std::cout << " at x [ ";
-    std::copy(s.mRecord.begin(), s.mRecord.end(), std::ostream_iterator<double>(std::cout, " "));
+    std::copy(gRecord.begin(), gRecord.end(), std::ostream_iterator<double>(std::cout, " "));
     std::cout << "]\n";
     stat.emplace_back((double) mseconds, s.mSteps);
-    return s.mRecordVal;
+    return gRecv;
 }
 
 bool testBench(const BM& bm) {
