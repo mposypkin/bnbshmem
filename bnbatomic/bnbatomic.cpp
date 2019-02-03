@@ -94,12 +94,13 @@ std::ostream& operator<<(std::ostream & out, const State s) {
 }
 
 void updateRecord(double newrv, const std::vector<double> &record) {
-    double rv = gRecv.load(morder);
-    while (newrv < rv) {
+    double rv = gRecv;
+    if (newrv < rv) {
         std::lock_guard<std::mutex> lock(gMutex);
-        gNumRecUpdates ++;
-        if (gRecv.EXCHNAGE_OPER(rv, newrv, morder)) {
+        if (newrv < gRecv) {
+            gRecv = newrv;
             gRecord = record;
+            gNumRecUpdates++;
         }
     }
 }
