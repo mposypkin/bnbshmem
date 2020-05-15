@@ -44,7 +44,11 @@ std::atomic_int gNumRecUpdates;
 
 std::mutex gMutex;
 
-std::vector<BnBStat> stat;
+std::vector<BnBStat> gStat;
+
+std::ostream* gOutStream = &std::cout;
+
+std::ostream* gStatStream = &std::cout;
 
 //const std::memory_order morder = std::memory_order_seq_cst;
 const std::memory_order morder = std::memory_order_relaxed;
@@ -150,7 +154,7 @@ void solve(State& s, const BM& bm) {
         while (true) {
             if (s.mPool.empty())
                 break;
-            //std::cout << s << "\n";
+            //*outStream << s << "\n";
             presolve(s);
             const int remMaxSteps = s.mMaxSteps - s.mSteps;
             if (remMaxSteps == 0)
@@ -202,41 +206,42 @@ double findMin(const BM& bm) {
     solve(s, bm);
 #endif
     end = std::chrono::system_clock::now();
-    int mseconds = (std::chrono::duration_cast<std::chrono::microseconds> (end - start)).count();
-    std::cout << "Time: " << mseconds << " microsecond\n";
-    std::cout << "Time per subproblem: " << (double) mseconds / (double) s.mSteps << " miscroseconds." << std::endl;
+    long long int mseconds = (std::chrono::duration_cast<std::chrono::microseconds> (end - start)).count();
+    *gOutStream << "Time: " << mseconds << " microsecond\n";
+    *gOutStream << "Time per subproblem: " << (double) mseconds / (double) s.mSteps << " miscroseconds." << std::endl;
     if (s.mSteps >= gMaxStepsTotal) {
-        std::cout << "Failed to converge in " << gMaxStepsTotal << " steps\n";
+        *gOutStream << "Failed to converge in " << gMaxStepsTotal << " steps\n";
     } else {
-        std::cout << "Converged in " << s.mSteps << " steps\n";
+        *gOutStream << "Converged in " << s.mSteps << " steps\n";
     }
-    std::cout << "Number of record updates: " << gNumRecUpdates << "\n";
-    std::cout << "BnB found = " << gRecv << std::endl;
-    std::cout << " at x [ ";
-    std::copy(gRecord.begin(), gRecord.end(), std::ostream_iterator<double>(std::cout, " "));
-    std::cout << "]\n";
-    stat.emplace_back((double) mseconds, s.mSteps);
+    *gOutStream << "Number of record updates: " << gNumRecUpdates << "\n";
+    *gOutStream << "BnB found = " << gRecv << std::endl;
+    *gOutStream << " at x [ ";
+    std::copy(gRecord.begin(), gRecord.end(), std::ostream_iterator<double>(*gOutStream, " "));
+    *gOutStream << "]\n";
+    gStat.emplace_back(mseconds, s.mSteps);
     return gRecv;
 }
 
 bool testBench(const BM& bm) {
     bool rv = true;
-    std::cout << "*************Testing benchmark**********" << std::endl;
-    std::cout << bm;
+    *gOutStream << "*************Testing benchmark**********" << std::endl;
+    *gOutStream << bm;
     double v = findMin(bm);
     double diff = v - bm.getGlobMinY();
     if (diff > gEps) {
-        std::cout << "BnB failed for " << bm.getDesc() << " benchmark " << std::endl;
+        *gOutStream << "BnB failed for " << bm.getDesc() << " benchmark " << std::endl;
         rv = false;
     }
-    std::cout << "the difference is " << v - bm.getGlobMinY() << std::endl;
-    std::cout << "****************************************" << std::endl << std::endl;
+    *gOutStream << "the difference is " << v - bm.getGlobMinY() << std::endl;
+    *gOutStream << "****************************************" << std::endl << std::endl;
     char c;
     return rv;
 }
 
 int main(int argc, char* argv[]) {
     std::string bench;
+
 #if 0    
     Benchmarks<double> tests;
 #else 
@@ -250,7 +255,7 @@ int main(int argc, char* argv[]) {
             std::cout << b->getDesc() << "\n";
         }
         return 0;
-    } else if (argc == 8) {
+    } else if (argc == 8 || argc == 9) {
         nruns = atoi(argv[1]);
         bench = argv[2];
         gKnrec = argv[3];
@@ -258,14 +263,17 @@ int main(int argc, char* argv[]) {
         gMaxStepsTotal = atoi(argv[5]);
         gProcs = atoi(argv[6]);
         gMtStepsLimit = atoi(argv[7]);
+        if (argc == 9) {
+            gOutStream = new BnbStream(nullptr);
+        }
     } else {
-        std::cerr << "Usage: " << argv[0] << " number_of_runs name_of_bench knrec|unknrec eps max_steps virtual_procs_number parallel_steps_limit\n";
+        std::cerr << "Usage: " << argv[0] << " number_of_runs name_of_bench knrec|unknrec eps max_steps virtual_procs_number parallel_steps_limit [statonly]\n";
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
     }
-    std::cout << "Simple PBnB solver with np = " << gProcs << ", mtStepsLimit =  " << gMtStepsLimit << ", maxStepsTotal = " << gMaxStepsTotal << std::endl;
-    std::cout << "record is " << (gRecv.is_lock_free() ? "lock free" : "not lock free") << std::endl;
+    *gOutStream << "Simple PBnB solver with np = " << gProcs << ", mtStepsLimit =  " << gMtStepsLimit << ", maxStepsTotal = " << gMaxStepsTotal << std::endl;
+    *gOutStream << "record is " << (gRecv.is_lock_free() ? "lock free" : "not lock free") << std::endl;
 #if 0    
     PowellSingular2Benchmark<double> pb(8);
     testBench(pb);
@@ -276,5 +284,5 @@ int main(int argc, char* argv[]) {
                 testBench(*bm);
         }
 #endif   
-    std::cout << "Statistics:\n" << stat;
+    *gStatStream << "Statistics:\n" << gStat;
 }

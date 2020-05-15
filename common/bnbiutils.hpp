@@ -15,13 +15,13 @@
 #ifndef BNBIUTILS_HPP
 #define BNBIUTILS_HPP
 
+#include <iostream>
+
 #include "parbench.hpp"
 
 using BM = Benchmark<double>;
 
 using Box = std::vector<Interval<double>>;
-
-
 
 /**
  * Width of the interval
@@ -65,6 +65,22 @@ void split(const Box& ibox, std::vector<Box>& v) {
     v.push_back(std::move(b1));
     v.push_back(std::move(b2));
 }
+
+struct BnbStream : public std::ostream, std::streambuf {
+public:
+
+    BnbStream(std::ostream* outs = &std::cout) : std::ostream(this), mOuts(outs) {
+    }
+
+    std::streambuf::int_type overflow(std::streambuf::int_type c) {
+        if(mOuts != nullptr)
+            mOuts->put(c);
+        return c;
+    }
+
+private:
+    std::ostream *mOuts;
+};
 
 #endif /* BNBIUTILS_HPP */
 

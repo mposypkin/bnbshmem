@@ -35,7 +35,7 @@ constexpr char knownRecord[] = "knrec";
 
 static double gEps;
 
-std::vector<BnBStat> stat;
+std::vector<BnBStat> gStat;
 
 
 double findMin(const BM& bm, const double eps, const long long int maxstep, const int n_thr) {
@@ -125,7 +125,7 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
 
     std::cout << bm.getDesc() << ":" << steps << "\n";
 
-    stat.emplace_back((double) mseconds, steps);
+    gStat.emplace_back((double) mseconds, steps);
     return recordVal;
 }
 
@@ -181,6 +181,6 @@ int main(int argc, char* argv[]) {
         }
 
 
-    std::cout << "Statistics:\n" << stat;
+    std::cout << "Statistics:\n" << gStat;
 
 }

@@ -50,7 +50,7 @@ static int gMtStepsLimit = 1000;
 
 std::atomic<double> gRecord;
 
-std::vector<BnBStat> stat;
+std::vector<BnBStat> gStat;
 
 /**
  * BnB state
@@ -439,7 +439,7 @@ double findMin(const BM& bm) {
     std::copy(s->mRecord.begin(), s->mRecord.end(), std::ostream_iterator<double>(std::cout, " "));
     std::cout << "]\n";
 
-    stat.emplace_back((double) mseconds, steps);
+    gStat.emplace_back((double) mseconds, steps);
 
     return gRecord.load();
 }
@@ -517,5 +517,5 @@ int main(int argc, char** argv) {
             if (bench == bm->getDesc())
                 testBench(*bm);
         }
-    std::cout << "Statistics:\n" << stat;
+    std::cout << "Statistics:\n" << gStat;
 }

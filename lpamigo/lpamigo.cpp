@@ -45,7 +45,7 @@ std::vector<double> gRecord;
 
 std::atomic<int> gNumWaitThreads(0);
 
-std::vector<BnBStat> stat;
+std::vector<BnBStat> gStat;
 
 std::mutex gRecordLock;
 
@@ -176,7 +176,7 @@ double findMin(const BM& bm) {
     std::cout << " at x [ ";
     std::copy(gRecord.begin(), gRecord.end(), std::ostream_iterator<double>(std::cout, " "));
     std::cout << "]\n";
-    stat.emplace_back((double) mseconds, gSteps);
+    gStat.emplace_back((double) mseconds, gSteps);
     return gRecv;
 }
 
@@ -236,5 +236,5 @@ int main(int argc, char* argv[]) {
                 testBench(*bm);
         }
 #endif   
-    std::cout << "Statistics:\n" << stat;
+    std::cout << "Statistics:\n" << gStat;
 }
