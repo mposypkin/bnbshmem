@@ -34,7 +34,7 @@ static double gEps;
 
 static std::string gKnrec;
 
-constexpr char knownRecord[] = "knrec";
+constexpr char gKnownRecord[] = "knrec";
 
 std::atomic<double> gRecv;
 
@@ -50,8 +50,6 @@ std::ostream* gOutStream = &std::cout;
 
 std::ostream* gStatStream = &std::cout;
 
-//const std::memory_order morder = std::memory_order_seq_cst;
-const std::memory_order morder = std::memory_order_relaxed;
 
 #define EXCHNAGE_OPER compare_exchange_strong
 //#define EXCHNAGE_OPER compare_exchange_weak
@@ -190,7 +188,7 @@ double findMin(const BM& bm) {
     }
     State s;
     s.mPool.push_back(ibox);
-    if (gKnrec == std::string(knownRecord)) {
+    if (gKnrec == std::string(gKnownRecord)) {
         gRecv = bm.getGlobMinY();
     } else {
         gRecv = std::numeric_limits<double>::max();
@@ -284,5 +282,5 @@ int main(int argc, char* argv[]) {
                 testBench(*bm);
         }
 #endif   
-    *gStatStream << "Statistics:\n" << gStat;
+    *gStatStream << "Statistics for " << bench << ":\n" << gStat;
 }

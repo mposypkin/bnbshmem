@@ -34,7 +34,7 @@ public:
     /**
      * The total wall running time 
      */
-    const double mTotalTime;
+    const long long int mTotalTime;
     /**
      * The total steps
      */

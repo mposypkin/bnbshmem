@@ -31,12 +31,15 @@ static int gProcs;
 
 static std::string gKnrec;
 
-constexpr char knownRecord[] = "knrec";
+constexpr char gKnownRecord[] = "knrec";
 
 static double gEps;
 
 std::vector<BnBStat> gStat;
 
+std::ostream* gOutStream = &std::cout;
+
+std::ostream* gStatStream = &std::cout;
 
 double findMin(const BM& bm, const double eps, const long long int maxstep, const int n_thr) {
     const int dim = bm.getDim();
@@ -50,7 +53,7 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
     std::vector<double> c(dim);
     std::vector<double> recordVec(dim);
     double recordVal;
-    if (gKnrec == std::string(knownRecord)) {
+    if (gKnrec == std::string(gKnownRecord)) {
         recordVal = bm.getGlobMinY();
     } else {
         recordVal = std::numeric_limits<double>::max();
@@ -111,19 +114,19 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
     }
     auto end = std::chrono::system_clock::now();
     unsigned long int mseconds = (std::chrono::duration_cast<std::chrono::microseconds> (end - start)).count();
-    std::cout << "Time: " << mseconds << " microsecond\n";
-    std::cout << "Time per subproblem: " << (double) mseconds / (double) steps << " miscroseconds." << std::endl;
+    *gOutStream << "Time: " << mseconds << " microsecond\n";
+    *gOutStream << "Time per subproblem: " << (double) mseconds / (double) steps << " miscroseconds." << std::endl;
     if (steps >= gMaxStepsTotal) {
-        std::cout << "Failed to converge in " << gMaxStepsTotal << " steps\n";
+        *gOutStream << "Failed to converge in " << gMaxStepsTotal << " steps\n";
     } else {
-        std::cout << "Converged in " << steps << " steps\n";
+        *gOutStream << "Converged in " << steps << " steps\n";
     }
-    std::cout << "BnB found = " << recordVal << std::endl;
-    std::cout << " at x [ ";
-    std::copy(recordVec.begin(), recordVec.end(), std::ostream_iterator<double>(std::cout, " "));
-    std::cout << "]\n";
+    *gOutStream << "BnB found = " << recordVal << std::endl;
+    *gOutStream << " at x [ ";
+    std::copy(recordVec.begin(), recordVec.end(), std::ostream_iterator<double>(*gOutStream, " "));
+    *gOutStream << "]\n";
 
-    std::cout << bm.getDesc() << ":" << steps << "\n";
+    *gOutStream << bm.getDesc() << ":" << steps << "\n";
 
     gStat.emplace_back((double) mseconds, steps);
     return recordVal;
@@ -131,16 +134,16 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
 
 bool testBench(const BM& bm) {
     bool rv = true;
-    std::cout << "*************Testing benchmark**********" << std::endl;
-    std::cout << bm;
+    *gOutStream << "*************Testing benchmark**********" << std::endl;
+    *gOutStream << bm;
     double v = findMin(bm, gEps, gMaxStepsTotal, gProcs);
     double diff = v - bm.getGlobMinY();
     if (diff > gEps) {
-        std::cout << "BnB failed for " << bm.getDesc() << " benchmark " << std::endl;
+        *gOutStream << "BnB failed for " << bm.getDesc() << " benchmark " << std::endl;
         rv = false;
     }
-    std::cout << "the difference is " << v - bm.getGlobMinY() << std::endl;
-    std::cout << "****************************************" << std::endl << std::endl;
+    *gOutStream << "the difference is " << v - bm.getGlobMinY() << std::endl;
+    *gOutStream << "****************************************" << std::endl << std::endl;
     return rv;
 }
 
@@ -156,24 +159,27 @@ int main(int argc, char* argv[]) {
 
     if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
-            std::cout << b->getDesc() << "\n";
+            *gOutStream << b->getDesc() << "\n";
         }
         return 0;
-    } else if (argc == 7) {
+    } else if (argc == 7 || argc == 8) {
         nruns = atoi(argv[1]);
         bench = argv[2];
         gKnrec = argv[3];
         gEps = atof(argv[4]);
         gMaxStepsTotal = atoi(argv[5]);
         gProcs = atoi(argv[6]);
+        if (argc == 8) {
+            gOutStream = new BnbStream(nullptr);
+        }
     } else {
-        std::cerr << "Usage: " << argv[0] << " num_of_runs name_of_bench knrec|unknrec eps max_steps omp_thread_number\n";
+        std::cerr << "Usage: " << argv[0] << " num_of_runs name_of_bench knrec|unknrec eps max_steps omp_thread_number [statonly]\n";
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
     }
 
-    std::cout << "Openmp PBnB solver with " << std::endl;
+    *gOutStream << "Openmp PBnB solver with " << std::endl;
     for (int z = 0; z < nruns; z++)
         for (auto bm : tests) {
             if (bench == bm->getDesc())
@@ -181,6 +187,6 @@ int main(int argc, char* argv[]) {
         }
 
 
-    std::cout << "Statistics:\n" << gStat;
+    *gStatStream << "Statistics for " << bench << ":\n" << gStat;
 
 }

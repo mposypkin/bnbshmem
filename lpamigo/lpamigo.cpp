@@ -37,7 +37,7 @@ static double gEps;
 
 static std::string gKnrec;
 
-constexpr char knownRecord[] = "knrec";
+constexpr char gKnownRecord[] = "knrec";
 
 std::atomic<double> gRecv;
 
@@ -55,8 +55,12 @@ std::condition_variable gPoolCV;
 
 std::atomic<long long int> gSteps;
 
-const std::memory_order morder = std::memory_order_seq_cst;
+const std::memory_order gMorder = std::memory_order_seq_cst;
 //const std::memory_order morder = std::memory_order_relaxed;
+
+std::ostream* gOutStream = &std::cout;
+
+std::ostream* gStatStream = &std::cout;
 
 #define EXCHNAGE_OPER compare_exchange_strong
 //#define EXCHNAGE_OPER compare_exchange_weak
@@ -118,12 +122,12 @@ void solve(std::shared_ptr<State> s, const BM& bm) {
             locRecv = v;
             locRecord = c;
         }
-        double rv = gRecv.load(morder);
+        double rv = gRecv.load(gMorder);
         while (v < rv) {
-            gRecv.EXCHNAGE_OPER(rv, v, morder);
+            gRecv.EXCHNAGE_OPER(rv, v, gMorder);
         }
         auto lb = bm.calcInterval(b).lb();
-        if (lb <= gRecv.load(morder) - gEps) {
+        if (lb <= gRecv.load(gMorder) - gEps) {
             split(b, s->mPool);
         }
     }
@@ -141,7 +145,7 @@ double findMin(const BM& bm) {
     }
     auto s = std::make_shared<State>();
     s->mPool.push_back(ibox);
-    if (gKnrec == std::string(knownRecord)) {
+    if (gKnrec == std::string(gKnownRecord)) {
         gRecv = bm.getGlobMinY();
     } else {
         gRecv = std::numeric_limits<double>::max();
@@ -159,39 +163,39 @@ double findMin(const BM& bm) {
         gPoolCV.wait(lock, []() {
             return gNumWaitThreads == 0;
         });
-        std::cout << "==" << gNumWaitThreads << "==\n";
+        *gOutStream << "==" << gNumWaitThreads << "==\n";
     }
 #endif
     end = std::chrono::system_clock::now();
     int mseconds = (std::chrono::duration_cast<std::chrono::microseconds> (end - start)).count();
-    std::cout << "Time: " << mseconds << " microsecond\n";
-    std::cout << "Time per subproblem: " << (double) mseconds / (double) gSteps << " miscroseconds." << std::endl;
+    *gOutStream << "Time: " << mseconds << " microsecond\n";
+    *gOutStream << "Time per subproblem: " << (double) mseconds / (double) gSteps << " miscroseconds." << std::endl;
     if (gSteps >= gMaxStepsTotal) {
-        std::cout << "Failed to converge in " << gMaxStepsTotal << " steps\n";
+        *gOutStream << "Failed to converge in " << gMaxStepsTotal << " steps\n";
     } else {
-        std::cout << "Converged in " << gSteps << " steps\n";
+        *gOutStream << "Converged in " << gSteps << " steps\n";
     }
 
-    std::cout << "BnB found = " << gRecv << std::endl;
-    std::cout << " at x [ ";
-    std::copy(gRecord.begin(), gRecord.end(), std::ostream_iterator<double>(std::cout, " "));
-    std::cout << "]\n";
+    *gOutStream << "BnB found = " << gRecv << std::endl;
+    *gOutStream << " at x [ ";
+    std::copy(gRecord.begin(), gRecord.end(), std::ostream_iterator<double>(*gOutStream, " "));
+    *gOutStream << "]\n";
     gStat.emplace_back((double) mseconds, gSteps);
     return gRecv;
 }
 
 bool testBench(const BM& bm) {
     bool rv = true;
-    std::cout << "*************Testing benchmark**********" << std::endl;
-    std::cout << bm;
+    *gOutStream << "*************Testing benchmark**********" << std::endl;
+    *gOutStream << bm;
     double v = findMin(bm);
     double diff = v - bm.getGlobMinY();
     if (diff > gEps) {
-        std::cout << "BnB failed for " << bm.getDesc() << " benchmark " << std::endl;
+        *gOutStream << "BnB failed for " << bm.getDesc() << " benchmark " << std::endl;
         rv = false;
     }
-    std::cout << "the difference is " << v - bm.getGlobMinY() << std::endl;
-    std::cout << "****************************************" << std::endl << std::endl;
+    *gOutStream << "the difference is " << v - bm.getGlobMinY() << std::endl;
+    *gOutStream << "****************************************" << std::endl << std::endl;
     char c;
     return rv;
 }
@@ -208,24 +212,27 @@ int main(int argc, char* argv[]) {
 
     if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
-            std::cout << b->getDesc() << "\n";
+            *gOutStream << b->getDesc() << "\n";
         }
         return 0;
-    } else if (argc == 7) {
+    } else if (argc == 7 || argc == 8) {
         nruns = atoi(argv[1]);
         bench = argv[2];
         gKnrec = argv[3];
         gEps = atof(argv[4]);
         gMaxStepsTotal = atoi(argv[5]);
         gProcs = atoi(argv[6]);
+        if (argc == 8) {
+            gOutStream = new BnbStream(nullptr);
+        }
     } else {
-        std::cerr << "Usage: " << argv[0] << " number_of_runs name_of_bench knrec|unknrec eps max_steps virtual_procs_number\n";
+        std::cerr << "Usage: " << argv[0] << " number_of_runs name_of_bench knrec|unknrec eps max_steps virtual_procs_number [statonly]\n";
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
     }
-    std::cout << "Local PAMIGO BnB solver with np = " << gProcs << "\n";
-    std::cout << "record is " << (gRecv.is_lock_free() ? "lock free" : "not lock free") << std::endl;
+    *gOutStream << "Local PAMIGO BnB solver with np = " << gProcs << "\n";
+    *gOutStream << "record is " << (gRecv.is_lock_free() ? "lock free" : "not lock free") << std::endl;
 #if 0    
     PowellSingular2Benchmark<double> pb(8);
     testBench(pb);
@@ -236,5 +243,5 @@ int main(int argc, char* argv[]) {
                 testBench(*bm);
         }
 #endif   
-    std::cout << "Statistics:\n" << gStat;
+    *gStatStream << "Statistics for " << bench << ":\n" << gStat;
 }
