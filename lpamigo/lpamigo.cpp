@@ -180,7 +180,7 @@ double findMin(const BM& bm) {
     *gOutStream << " at x [ ";
     std::copy(gRecord.begin(), gRecord.end(), std::ostream_iterator<double>(*gOutStream, " "));
     *gOutStream << "]\n";
-    gStat.emplace_back((double) mseconds, gSteps);
+    gStat.emplace_back(mseconds, gSteps);
     return gRecv;
 }
 

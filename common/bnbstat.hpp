@@ -27,7 +27,7 @@ public:
      * @param totalTime the total running time
      * @param steps the number of steps performed
      */
-    BnBStat(double totalTime, long long int steps) :
+    BnBStat(long long int totalTime, long long int steps) :
     mTotalTime(totalTime), mSteps(steps), mTPS(totalTime / (double) steps) {
     }
 

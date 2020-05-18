@@ -128,7 +128,7 @@ double findMin(const BM& bm, const double eps, const long long int maxstep, cons
 
     *gOutStream << bm.getDesc() << ":" << steps << "\n";
 
-    gStat.emplace_back((double) mseconds, steps);
+    gStat.emplace_back(mseconds, steps);
     return recordVal;
 }
 
