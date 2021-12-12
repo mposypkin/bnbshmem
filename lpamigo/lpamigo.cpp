@@ -1,9 +1,9 @@
 /*
- * A  multithreaded interval-based bnb solver L-PAMIGO motivated by 
- * Branch-and-Bound interval global optimization on shared memory multiprocessors by  L. G. Casado J. A. Martínez I. García E. M. T. Hendrix 
+ * A  multithreaded interval-based bnb solver L-PAMIGO motivated by
+ * Branch-and-Bound interval global optimization on shared memory multiprocessors by  L. G. Casado J. A. Martínez I. García E. M. T. Hendrix
  */
 
-/* 
+/*
  * File:   tutorialbnb.cpp
  * Author: mposypkin
  *
@@ -153,9 +153,9 @@ double findMin(const BM& bm) {
     gSteps = 0;
     std::chrono::time_point<std::chrono::system_clock> start, end;
     start = std::chrono::system_clock::now();
-#if 0   
+#if 0
     solveSerial(s, bm, eps);
-#else    
+#else
     gNumWaitThreads = 1;
     solve(s, bm);
     {
@@ -202,11 +202,11 @@ bool testBench(const BM& bm) {
 
 int main(int argc, char* argv[]) {
     std::string bench;
-#if 0    
+#if 0
     Benchmarks<double> tests;
-#else 
+#else
     ParBenchmarks<double> tests;
-#endif    
+#endif
 
     int nruns = 0;
 
@@ -233,15 +233,15 @@ int main(int argc, char* argv[]) {
     }
     *gOutStream << "Local PAMIGO BnB solver with np = " << gProcs << "\n";
     *gOutStream << "record is " << (gRecv.is_lock_free() ? "lock free" : "not lock free") << std::endl;
-#if 0    
+#if 0
     PowellSingular2Benchmark<double> pb(8);
     testBench(pb);
-#else        
+#else
     for (int z = 0; z < nruns; z++)
         for (auto bm : tests) {
             if (bench == bm->getDesc())
                 testBench(*bm);
         }
-#endif   
-    *gStatStream << "Statistics for " << bench << ":\n" << gStat;
+#endif
+    *gStatStream << "Statistics:\n" << gStat;
 }

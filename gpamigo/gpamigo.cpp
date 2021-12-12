@@ -1,9 +1,9 @@
 /*
- * A  multithreaded interval-based bnb solver Global-PAMIGO motivated by 
- * Branch-and-Bound interval global optimization on shared memory multiprocessors by  L. G. Casado J. A. Martínez I. García E. M. T. Hendrix 
+ * A  multithreaded interval-based bnb solver Global-PAMIGO motivated by
+ * Branch-and-Bound interval global optimization on shared memory multiprocessors by  L. G. Casado J. A. Martínez I. García E. M. T. Hendrix
  */
 
-/* 
+/*
  * File:   tutorialbnb.cpp
  * Author: mposypkin
  *
@@ -36,6 +36,12 @@ static int gMaxStepsTotal = 0;
 static double gEps;
 
 static std::string gKnrec;
+
+constexpr int DFS_POLICY = 1;
+
+constexpr int WFS_POLICY = 2;
+
+std::atomic<int> gBranchPolicy(DFS_POLICY);
 
 constexpr char gKnownRecord[] = "knrec";
 
@@ -95,8 +101,13 @@ void solve(State& s, const BM& bm) {
                 gPoolCV.notify_one();
                 break;
             }
-            b = s.mPool.back();
-            s.mPool.pop_back();
+            if(gBranchPolicy == DFS_POLICY) {
+                b = s.mPool.back();
+                s.mPool.pop_back();
+            } else {
+                b = s.mPool.front();
+                s.mPool.erase(s.mPool.begin());
+            }
             gSteps++;
             gNumWaitThreads--;
         }
@@ -167,6 +178,7 @@ double findMin(const BM& bm) {
 bool testBench(const BM& bm) {
     bool rv = true;
     *gOutStream << "*************Testing benchmark**********" << std::endl;
+    *gOutStream << "Branching policy = " << ((gBranchPolicy == DFS_POLICY) ? "dfs" : "wfs") << "\n";
     *gOutStream << bm;
     double v = findMin(bm);
     double diff = v - bm.getGlobMinY();
@@ -182,46 +194,57 @@ bool testBench(const BM& bm) {
 
 int main(int argc, char* argv[]) {
     std::string bench;
-#if 0    
+#if 0
     Benchmarks<double> tests;
-#else 
+#else
     ParBenchmarks<double> tests;
-#endif    
+#endif
 
     int nruns = 0;
+
+    gBranchPolicy = DFS_POLICY;
 
     if ((argc == 2) && (std::string(argv[1]) == std::string("list"))) {
         for (auto b : tests) {
             *gOutStream << b->getDesc() << "\n";
         }
         return 0;
-    } else if (argc == 7 || argc == 8) {
+    } else if (argc >= 7 && argc <=  9) {
         nruns = atoi(argv[1]);
         bench = argv[2];
         gKnrec = argv[3];
         gEps = atof(argv[4]);
         gMaxStepsTotal = atoi(argv[5]);
         gProcs = atoi(argv[6]);
-        if (argc == 8) {
-            gOutStream = new BnbStream(nullptr);
+        if (argc >= 8) {
+          if (std::string(argv[7]) == std::string("dfs"))
+              gBranchPolicy = DFS_POLICY;
+          else if (std::string(argv[7]) == std::string("wfs"))
+              gBranchPolicy = WFS_POLICY;
+          else if (std::string(argv[7]) == std::string("statonly"))
+              gOutStream = new BnbStream(nullptr);
+        }
+        if (argc == 9) {
+            if (std::string(argv[8]) == std::string("statonly"))
+                gOutStream = new BnbStream(nullptr);
         }
     } else {
-        std::cerr << "Usage: " << argv[0] << " number_of_runs name_of_bench knrec|unknrec eps max_steps virtual_procs_number [statonly]\n";
+        std::cerr << "Usage: " << argv[0] << " number_of_runs name_of_bench knrec|unknrec eps max_steps virtual_procs_number [dfs| wfs statonly]\n";
         std::cerr << "or to list benchmarks run:\n";
         std::cerr << argv[0] << " list\n";
         return -1;
     }
     *gOutStream << "Global PAMIGO BnB solver with np = " << gProcs << "\n";
     *gOutStream << "record is " << (gRecv.is_lock_free() ? "lock free" : "not lock free") << std::endl;
-#if 0    
+#if 0
     PowellSingular2Benchmark<double> pb(8);
     testBench(pb);
-#else        
+#else
     for (int z = 0; z < nruns; z++)
         for (auto bm : tests) {
             if (bench == bm->getDesc())
                 testBench(*bm);
         }
-#endif   
-    *gStatStream << "Statistics for " << bench << ":\n" << gStat;
+#endif
+    *gStatStream << "Statistics:\n" << gStat;
 }
